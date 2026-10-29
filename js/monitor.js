@@ -163,20 +163,28 @@ window.Monitor = (function () {
   function onActivity() { S.lastActivity = now(); }
 
   /* ---------------- focus / visibility ---------------- */
-  function onBlur() {
-    S.lastActivity = now();
-    if (!S.running || !document.hasFocus()) {
-      if (S.running && !S.unfocusedSince) S.unfocusedSince = now();
-      return;
-    }
-  }
-
-  function handleBlur() {
-    if (!S.running) return;
+  /* один уход = одна запись: blur и visibilitychange при переключении вкладки
+     срабатывают вместе — считаем первое событие, второе отбрасываем */
+  function markHidden(label) {
+    if (!S.running || S.unfocusedSince) return;
     S.unfocusedSince = now();
     S.tabSwitches++;
-    emit('blur', 'Уход со страницы / потеря фокуса', S.challengeActive ? 8 : 4, S.challengeActive ? 2 : 1);
+    emit('blur', label, S.challengeActive ? 8 : 4, S.challengeActive ? 2 : 1);
     if (cb.focus) cb.focus(false);
+  }
+
+  function onBlur() {
+    S.lastActivity = now();
+    if (S.running && !S.unfocusedSince) S.unfocusedSince = now();
+  }
+
+  function handleBlur() { markHidden('Уход со страницы / потеря фокуса'); }
+
+  function handleVisibility() {
+    /* переключение вкладки, сворачивание, второй план — visibilitychange ловится
+       всегда, даже когда blur по какой-то причине не пришёл */
+    if (document.hidden) markHidden('Скрытие вкладки — переключение вкладок');
+    else handleFocus();
   }
 
   function handleFocus() {
@@ -210,14 +218,36 @@ window.Monitor = (function () {
       emit('devtools', 'Обнаружено окно инструментов разработчика', 8, 2);
     }
 
-    /* второй экран: резкий скачок координат окна (с защитой от повторов) */
+    /* второй экран — три независимых признака:
+       1) screen.isExtended: браузер сам видит, что рабочий стол расширен (Chrome/Edge);
+       2) геометрия: окно уехало за границы основного монитора (висит на втором);
+       3) резкий скачок координат окна (перетащили на другой монитор) */
+    var scr = window.screen || {};
     var sx = window.screenX !== undefined ? window.screenX : window.screenLeft;
-    if (S.lastScreenX !== null && Math.abs(sx - S.lastScreenX) > 600 && now() - S.lastScreenEvent > 8000) {
+    var sy = window.screenY !== undefined ? window.screenY : window.screenTop;
+    var extended = false;
+    try { if (scr.isExtended === true) extended = true; } catch (eScr) {}
+    var aw = scr.availWidth || scr.width || 0;
+    if (typeof sx === 'number' && aw > 0) {
+      var ow = window.outerWidth || 0, oh = window.outerHeight || 0;
+      /* -40/+80 — запас на служебные рамки окна, чтобы не ругаться на максимизацию */
+      if (sx < -40 || (window.screenY !== undefined && sy < -40) ||
+          (ow > 0 && sx + ow > aw + 80)) extended = true;
+    }
+    var jumped = (typeof sx === 'number' && S.lastScreenX !== null && typeof S.lastScreenX === 'number' &&
+                  Math.abs(sx - S.lastScreenX) > 600 && now() - S.lastScreenEvent > 8000);
+    if (jumped) {
       S.screens = Math.max(S.screens, 2);
       S.lastScreenEvent = now();
       emit('screen', 'Возможен второй монитор (окно резко сместилось)', 10, 2);
+    } else if (extended) {
+      if (S.screens < 2) {
+        S.screens = 2;
+        S.lastScreenEvent = now();
+        emit('screen', 'Обнаружен второй экран / монитор', 10, 2);
+      }
     }
-    S.lastScreenX = sx;
+    if (typeof sx === 'number') S.lastScreenX = sx;
 
     /* зум */
     if ((window.devicePixelRatio || 1) !== S.dpr) {
@@ -267,6 +297,7 @@ window.Monitor = (function () {
     document.addEventListener('wheel', onActivity, { passive: true });
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('beforeunload', onBlur);
 
     S._t = setInterval(tick, cfg.tickInterval);
@@ -316,7 +347,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-2.5',
+      version: 'OBZVON-2.6',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,

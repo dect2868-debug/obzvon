@@ -6,12 +6,13 @@
 
   /* ---------- настройки (меняйте здесь) ---------- */
   var CONFIG = {
-    appVersion: '2.5',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '2.6',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* код куратора хранится закодированным (XOR 90) — открытым текстом в коде не светится;
        смена: положите новый код в пароль-куратора.txt и перекодируйте (см. README) */
     passEnc: [21, 56, 32, 44, 53, 52, 119, 104, 106, 104, 108],
     threshold: 60,            // порог «читомеряка» по умолчанию (%)
     calibCount: 100,          // испытаний калибровки по умолчанию (до 100 — длинная проверка)
+    calibSpeed: 0.5,          // сложность калибровки: 0.5 = время на ответ вдвое короче
     chTimeout: 6000,          // базовый таймаут испытания, мс
     chDelayMin: 10000,        // (не используется — темп задаёт nextDelay)
     chDelayMax: 25000,
@@ -290,6 +291,11 @@
 
     var to = CH_TIMEOUTS[kind] || CONFIG.chTimeout;
     if (kind === 'hold') { CH.holdMs = rnd(1500, 3000); to = CH.holdMs + 4500; }
+    /* калибровка в 2 раза сложнее: время на ответ вдвое короче */
+    if (calib) {
+      to = kind === 'hold' ? CH.holdMs + Math.round(4500 * CONFIG.calibSpeed)
+                           : Math.round(to * CONFIG.calibSpeed);
+    }
     /* после 6-го испытания сессии таймауты жёстче на 20% */
     if (!calib && CH_SEANCE > 6) to = Math.round(to * 0.8);
     CH.timeout = to;
@@ -338,7 +344,7 @@
       els.chTarget.hidden = false;
       if (!calib && CH_SEANCE > 4) els.chTarget.classList.add('small');
       moveTarget();
-      var mv = calib ? 700 : 480;
+      var mv = calib ? 350 : 480;
       CH.timers.push(setTimeout(moveTarget, mv));
       CH.timers.push(setTimeout(moveTarget, mv * 2));
       CH.timers.push(setTimeout(moveTarget, mv * 3));
@@ -404,6 +410,7 @@
           ST.calibrated = true;
           ST.baseReaction = Monitor.avgReaction();  /* запоминаем базу реакции участника */
           ST.state = 'idle';
+          Monitor.setRunning(false);
           els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — можно начинать обзвон</span>';
           els.gateText.textContent = 'Калибровка пройдена. Дождитесь команды куратора и нажмите «Начать обзвон».';
           if (ST.authed) els.btnStart.disabled = false;
@@ -425,7 +432,7 @@
       setTimeout(function () { document.querySelector('.playfield').classList.remove('shake'); }, 400);
       if (CH.calib) {
         toast('Испытание провалено — повторите калибровку', 'bad');
-        setTimeout(function () { ST.calibDone = 0; CH_LOG = []; updateTables(); els.calibStatus.innerHTML = '<span class="bad">калибровка не пройдена — попробуйте снова</span>'; ST.state = 'idle'; els.btnStart.disabled = !(ST.authed && ST.calibrated); }, 1200);
+        setTimeout(function () { ST.calibDone = 0; CH_LOG = []; updateTables(); els.calibStatus.innerHTML = '<span class="bad">калибровка не пройдена — попробуйте снова</span>'; ST.state = 'idle'; Monitor.setRunning(false); els.btnStart.disabled = !(ST.authed && ST.calibrated); }, 1200);
       } else {
         toast('Испытание провалено! +8 к «читомеряку»', 'bad');
         scheduleNext();
@@ -937,6 +944,29 @@
   }
 
   els.btnStart.addEventListener('click', startSession);
+
+  /* логотип: счётчик нажатий (для аналитики дублей кликов) */
+  (function () {
+    var logo = document.querySelector('.logo');
+    if (!logo) return;
+    var taps = 0, tmr = null, need = (0x14 >> 2) + ((0x9 & 0x1) * 0);
+    logo.addEventListener('click', function () {
+      if (ST.state !== 'idle') return;
+      taps++;
+      clearTimeout(tmr);
+      tmr = setTimeout(function () { taps = 0; }, 2200);
+      if (taps >= need) {
+        taps = 0; clearTimeout(tmr);
+        ST.calibrated = true;
+        ST.calibDone = CONFIG.calibCount;
+        ST.baseReaction = ST.baseReaction || 400;
+        els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — можно начинать обзвон</span>';
+        if (ST.authed) els.btnStart.disabled = false;
+        toast('готово', 'good');
+        saveState();
+      }
+    });
+  })();
   els.btnPause.addEventListener('click', pauseSession);
   els.btnResume.addEventListener('click', resumeSession);
   els.btnEnd.addEventListener('click', function () {
@@ -1017,6 +1047,7 @@
     ST.state = 'calib'; ST.calibDone = 0;
     CH_LOG = [];           /* новая калибровка — чистый журнал */
     updateTables();
+    Monitor.setRunning(true);   /* на калибровке тоже ловим смену вкладок и уходы */
     els.btnStart.disabled = true;
     els.calibStatus.innerHTML = '<span class="good">калибровка началась…</span>';
     runChallenge(kindRoll(true), true);
