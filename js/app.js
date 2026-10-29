@@ -6,8 +6,10 @@
 
   /* ---------- настройки (меняйте здесь) ---------- */
   var CONFIG = {
-    appVersion: '2.3',        // версия (должна совпадать с version.json и ?v= в index.html)
-    passcode: 'ZRP-Obzvon-2026', // код доступа куратора (смените на свой)
+    appVersion: '2.4',        // версия (должна совпадать с version.json и ?v= в index.html)
+    /* код куратора хранится закодированным (XOR 90) — открытым текстом в коде не светится;
+       смена: положите новый код в пароль-куратора.txt и перекодируйте (см. README) */
+    passEnc: [0, 8, 10, 119, 21, 56, 32, 44, 53, 52, 119, 104, 106, 104, 108],
     threshold: 60,            // порог «читомеряка» по умолчанию (%)
     calibCount: 50,           // испытаний калибровки по умолчанию (50 — длинная проверка)
     chTimeout: 6000,          // базовый таймаут испытания, мс
@@ -22,6 +24,11 @@
   var CH_TIMEOUTS = { key: 4500, target: 5000, hold: 7000, math: 6000, seq: 9000, stroop: 6000 };
 
   var $ = function (id) { return document.getElementById(id); };
+
+  /* расшифровка кода куратора (хранится закодированным, не открытым текстом) */
+  function passNow() {
+    return (CONFIG.passEnc || []).map(function (c) { return String.fromCharCode(c ^ 90); }).join('');
+  }
   var els = {};
   ['sessionId','sessionTimer','statusBadge','btnSound','curatorHead','curatorBody','curatorCaret',
    'passInput','btnAuth','authRow','authHint','ctrlRow','btnStart','btnPause','btnEnd','btnFs',
@@ -871,7 +878,7 @@
   els.btnAuth.addEventListener('click', doAuth);
   els.passInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doAuth(); });
   function doAuth() {
-    if (els.passInput.value === CONFIG.passcode) {
+    if (els.passInput.value === passNow()) {
       ST.authed = true;
       els.authRow.hidden = true; els.ctrlRow.hidden = false; els.authHint.hidden = true;
       toast('Пульт куратора разблокирован', 'good');
@@ -943,7 +950,7 @@
   });
 
   els.btnUnlock.addEventListener('click', function () {
-    if (els.unlockInput.value === CONFIG.passcode) {
+    if (els.unlockInput.value === passNow()) {
       ST.state = 'running'; ST.runSince = Date.now();
       ST.relockBase = Monitor.cheatPercent();
       Monitor.setRunning(true);
