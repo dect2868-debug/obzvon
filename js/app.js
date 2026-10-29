@@ -1,23 +1,23 @@
 /* ============================================================
-   ZRP OBZVON v2 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v2 :: APP  (логика сессии и испытаний)
    ============================================================ */
 (function () {
   'use strict';
 
   /* ---------- настройки (меняйте здесь) ---------- */
   var CONFIG = {
-    appVersion: '2.4',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '2.5',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* код куратора хранится закодированным (XOR 90) — открытым текстом в коде не светится;
        смена: положите новый код в пароль-куратора.txt и перекодируйте (см. README) */
-    passEnc: [0, 8, 10, 119, 21, 56, 32, 44, 53, 52, 119, 104, 106, 104, 108],
+    passEnc: [21, 56, 32, 44, 53, 52, 119, 104, 106, 104, 108],
     threshold: 60,            // порог «читомеряка» по умолчанию (%)
-    calibCount: 50,           // испытаний калибровки по умолчанию (50 — длинная проверка)
+    calibCount: 100,          // испытаний калибровки по умолчанию (до 100 — длинная проверка)
     chTimeout: 6000,          // базовый таймаут испытания, мс
     chDelayMin: 10000,        // (не используется — темп задаёт nextDelay)
     chDelayMax: 25000,
     holdMs: 2000,             // (база) удержание клавиши
     idleLimit: 65000,         // мс простоя до штрафа
-    storageKey: 'zrp_obzvon_v2_state'
+    storageKey: 'obzvon_v2_state'
   };
 
   /* таймауты по типам испытаний (мс) */
@@ -38,7 +38,7 @@
    'gate','gateText','btnCalibrate','calibStatus','playfield','chRound','chBar','chTask','arena','chTarget',
    'signalList','feedCount','pauseOverlay','btnResume','lockOverlay','lockTitle','lockText','unlockInput',
    'btnUnlock','sumOverlay','sumTag','sumVerdict','sumTable','btnSumReport','btnSumClose','toast','stroopRow',
-   'totalConc','concTrend','errBanner','selCalib','statTable','chTableBody','chStat','partPanel',
+   'totalConc','concTrend','errBanner','selCalib','statTable','chTableBody','chStat','partPanel','chPad',
    'btnPauseSelf','btnEndSelf','achRow']
    .forEach(function (id) { els[id] = $(id); });
 
@@ -286,6 +286,7 @@
     els.chTarget.classList.remove('small');
     els.stroopRow.hidden = true;
     els.stroopRow.innerHTML = '';
+    padReset();
 
     var to = CH_TIMEOUTS[kind] || CONFIG.chTimeout;
     if (kind === 'hold') { CH.holdMs = rnd(1500, 3000); to = CH.holdMs + 4500; }
@@ -343,6 +344,7 @@
       CH.timers.push(setTimeout(moveTarget, mv * 3));
     }
     els.chTask.innerHTML = taskHtml;
+    buildPad(kind);   /* экранная панель — ответ с телефона без физической клавиатуры */
 
     /* таймер испытания */
     els.chBar.style.transition = 'none';
@@ -386,6 +388,7 @@
     els.chTarget.classList.remove('small');
     els.stroopRow.hidden = true;
     els.stroopRow.innerHTML = '';
+    padReset();
     els.chBar.style.transition = 'width .3s';
     els.chBar.style.width = '0%';
 
@@ -446,22 +449,23 @@
 
   var CH_SEANCE = 1;
 
-  /* обработчики испытаний (сравнение по e.code — работает и с русской раскладкой) */
-  document.addEventListener('keydown', function (e) {
+  /* ---------- ввод испытаний ----------
+     Общий путь: физическая клавиатура (keydown) и экранная панель на телефоне
+     (buildPad) сводятся к одному codePress(code) — работает и с русской раскладкой. */
+  function codePress(code) {
     if (!CH.active) return;
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
 
     if (CH.kind === 'key') {
       var want = /^[A-Z]$/.test(CH.key) ? 'Key' + CH.key : 'Digit' + CH.key;
-      if (e.code === want) { e.preventDefault(); endChallenge(true, ''); return; }
-      if (/^(Key[A-Z]|Digit[0-9])$/.test(e.code)) { endChallenge(false, 'не та клавиша'); }
+      if (code === want) { endChallenge(true, ''); return; }
+      if (/^(Key[A-Z]|Digit[0-9])$/.test(code)) { endChallenge(false, 'не та клавиша'); }
       return;
     }
 
     if (CH.kind === 'seq') {
       if (!CH.seqReady) return;
-      if (/^(Key[A-Z]|Digit[0-9])$/.test(e.code)) {
-        var sc = e.code.indexOf('Key') === 0 ? e.code.slice(3) : e.code.slice(5);
+      if (/^(Key[A-Z]|Digit[0-9])$/.test(code)) {
+        var sc = code.indexOf('Key') === 0 ? code.slice(3) : code.slice(5);
         if (sc === CH.seq[CH.seqPos]) {
           CH.seqPos++;
           if (CH.seqPos >= CH.seq.length) { endChallenge(true, ''); return; }
@@ -474,8 +478,8 @@
     }
 
     if (CH.kind === 'math') {
-      if (/^Digit[0-9]$/.test(e.code)) {
-        var dg = e.code.slice(5);
+      if (/^Digit[0-9]$/.test(code)) {
+        var dg = code.slice(5);
         if (CH.answer[CH.typed.length] === dg) {
           CH.typed += dg;
           els.chTask.innerHTML = 'ОТВЕТ: <b>' + CH.typed + '</b> / ' + CH.answer;
@@ -486,22 +490,63 @@
       }
       return;
     }
+  }
 
-    if (CH.kind === 'hold' && e.code === 'Space') {
-      e.preventDefault();
-      if (!CH._holding) {
-        CH._holding = true;
-        els.chTask.innerHTML = 'ДЕРЖИТЕ…';
-        CH._holdT = setTimeout(function () { CH._holding = false; endChallenge(true, ''); }, CH.holdMs || CONFIG.holdMs);
-      }
-    }
-  });
-  document.addEventListener('keyup', function (e) {
-    if (CH.active && CH.kind === 'hold' && e.code === 'Space' && CH._holding) {
+  function holdDown() {
+    if (!CH.active || CH.kind !== 'hold' || CH._holding) return;
+    CH._holding = true;
+    els.chTask.innerHTML = 'ДЕРЖИТЕ…';
+    CH._holdT = setTimeout(function () { CH._holding = false; endChallenge(true, ''); }, CH.holdMs || CONFIG.holdMs);
+  }
+  function holdUp() {
+    if (CH.active && CH.kind === 'hold' && CH._holding) {
       clearTimeout(CH._holdT); CH._holding = false;
       endChallenge(false, 'отпустили слишком рано');
     }
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!CH.active) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+    if (CH.kind === 'hold' && e.code === 'Space') { e.preventDefault(); holdDown(); return; }
+    codePress(e.code);
   });
+  document.addEventListener('keyup', function (e) {
+    if (e.code === 'Space') holdUp();
+  });
+
+  /* ---------- экранная панель (телефон/планшет: ответ без физической клавиатуры) ---------- */
+  function padReset() { els.chPad.hidden = true; els.chPad.innerHTML = ''; }
+
+  function buildPad(kind) {
+    padReset();
+    if (kind === 'hold') {
+      var hb = document.createElement('button');
+      hb.type = 'button'; hb.className = 'hold-btn'; hb.textContent = 'УДЕРЖИВАЙТЕ';
+      var down = function (ev) { ev.preventDefault(); holdDown(); };
+      var up = function (ev) { ev.preventDefault(); holdUp(); };
+      hb.addEventListener('pointerdown', down);
+      hb.addEventListener('pointerup', up);
+      hb.addEventListener('pointercancel', up);
+      hb.addEventListener('pointerleave', up);
+      hb.addEventListener('touchstart', down, { passive: false });
+      hb.addEventListener('touchend', up, { passive: false });
+      hb.addEventListener('touchcancel', up, { passive: false });
+      els.chPad.appendChild(hb);
+      els.chPad.hidden = false;
+      return;
+    }
+    if (kind !== 'key' && kind !== 'math' && kind !== 'seq') return;
+    var chars = kind === 'math' ? '0123456789'.split('') : ABC.split('');
+    chars.forEach(function (ch) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'pad-key'; b.textContent = ch;
+      var code = /^[A-Z]$/.test(ch) ? 'Key' + ch : 'Digit' + ch;
+      b.addEventListener('click', function () { codePress(code); });
+      els.chPad.appendChild(b);
+    });
+    els.chPad.hidden = false;
+  }
   els.chTarget.addEventListener('click', function () { if (CH.active && CH.kind === 'target') endChallenge(true, ''); });
 
   /* ============================================================
@@ -515,7 +560,7 @@
     if (!ST.calibrated) { toast('Сначала пройдите калибровку', 'bad'); return; }
     ST.state = 'running';
     ST.startedAt = 0; ST.runSince = Date.now();
-    ST.sessionId = 'ZRP-' + Math.random().toString(16).slice(2, 6).toUpperCase() + '-' + Date.now().toString(36).slice(-4).toUpperCase();
+    ST.sessionId = 'OBZ-' + Math.random().toString(16).slice(2, 6).toUpperCase() + '-' + Date.now().toString(36).slice(-4).toUpperCase();
     els.sessionId.textContent = 'сессия ' + ST.sessionId;
     setBadge('идёт', 'badge-run');
     /* база реакции — результат калибровки (хранится отдельно, переживает итоги) */
@@ -682,7 +727,7 @@
   }
 
   /* ---------- средняя концентрация по всем обзвонам (накапливается) ---------- */
-  var TOT_KEY = 'zrp_obzvon_v2_totals';
+  var TOT_KEY = 'obzvon_v2_totals';
   var memTotals = null;
   function loadTotals() {
     if (memTotals) return memTotals;
@@ -861,7 +906,7 @@
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'zrp-report-' + (ST.sessionId || 'no-session') + '.json';
+    a.download = 'obzvon-report-' + (ST.sessionId || 'no-session') + '.json';
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
@@ -905,10 +950,11 @@
   els.btnReset.addEventListener('click', resetAll);
   els.selThreshold.addEventListener('change', function () { ST.threshold = parseInt(els.selThreshold.value, 10); });
 
-  /* сложность калибровки: 6 / 10 / 20 / 50 заданий */
+  /* сложность калибровки: 6 / 10 / 20 / 50 / 100 заданий */
   function syncCalibBtn() {
     els.btnCalibrate.textContent = '◎ Калибровка (' + CONFIG.calibCount + ' испытаний)';
   }
+  if (els.selCalib) { els.selCalib.value = String(CONFIG.calibCount); }
   els.selCalib.addEventListener('change', function () {
     if (ST.state !== 'idle') {
       els.selCalib.value = String(CONFIG.calibCount);

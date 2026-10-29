@@ -1,4 +1,4 @@
-/* ============ ZRP OBZVON v2 ============ */
+/* ============ ОБЗВОН v2 ============ */
 :root{
   --bg:#060a12;
   --bg2:#0a1120;
@@ -210,6 +210,22 @@ select{font-family:var(--mono);font-size:12px;color:var(--txt);background:rgba(4
 .ch-task b.big{font-size:clamp(22px,4.5vw,32px);letter-spacing:6px;color:var(--acc)}
 .ch-task .dim2{opacity:.35}
 
+/* ---------- экранная панель ввода (телефон/планшет) ---------- */
+.ch-pad{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:8px;margin-top:12px;
+  padding:12px;border-radius:14px;border:1px solid var(--line);background:rgba(8,13,24,.72)}
+.ch-pad[hidden]{display:none}
+.pad-key{min-height:48px;border:1px solid var(--line);border-radius:10px;background:var(--card2);
+  color:var(--acc);font-family:var(--mono);font-size:17px;font-weight:700;cursor:pointer;
+  transition:transform .1s,background .15s,border-color .15s;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;user-select:none}
+.pad-key:hover{border-color:rgba(52,231,255,.5)}
+.pad-key:active{transform:scale(.94);background:rgba(52,231,255,.18);border-color:var(--acc)}
+.hold-btn{grid-column:1/-1;width:100%;min-height:84px;border:2px solid var(--acc);border-radius:14px;
+  background:linear-gradient(180deg,rgba(52,231,255,.16),rgba(52,231,255,.05));color:var(--acc);
+  font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:3px;cursor:pointer;
+  touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;transition:background .15s,transform .1s}
+.hold-btn:active{background:rgba(52,231,255,.32);transform:scale(.99)}
+
 /* ---------- feed ---------- */
 .feed-list{list-style:none;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
 .feed-list::-webkit-scrollbar{width:6px}
@@ -306,6 +322,14 @@ select{font-family:var(--mono);font-size:12px;color:var(--txt);background:rgba(4
   .input{width:100%}
   .auth-row{flex-direction:column}
   .arena{height:180px}
+  /* телефон: крупные тач-цели для экранной панели */
+  .ch-task{font-size:14px;padding:10px 4px;min-height:44px}
+  .ch-task b{font-size:22px}
+  .ch-pad{grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;padding:9px}
+  .pad-key{min-height:52px;font-size:18px}
+  .hold-btn{min-height:96px;font-size:21px}
+  .ch-btn{padding:18px 22px;min-height:64px}
+  .panel-body{padding:12px}
 }
 
 /* ---------- баннер ошибок скриптов ---------- */

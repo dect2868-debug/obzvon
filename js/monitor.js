@@ -1,5 +1,5 @@
 /* ============================================================
-   ZRP OBZVON v2 :: MONITOR  (детект нарушений + система кандидата)
+   ОБЗВОН v2 :: MONITOR  (детект нарушений + система кандидата)
    ============================================================ */
 window.Monitor = (function () {
   'use strict';
@@ -144,7 +144,7 @@ window.Monitor = (function () {
     }
 
     if (e.code === 'PrintScreen') {
-      try { navigator.clipboard.writeText('ZRP-ОБЗВОН · попытка скриншота'); } catch (err) {}
+      try { navigator.clipboard.writeText('ОБЗВОН · попытка скриншота'); } catch (err) {}
       emit('shot', 'Снимок экрана (PrintScreen) — буфер очищен', 5);
       return;
     }
@@ -316,7 +316,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'ZRP-OBZVON-2.0',
+      version: 'OBZVON-2.5',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,
