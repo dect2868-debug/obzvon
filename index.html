@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Закрытая система обзвона ZRP" />
+  <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css?v=2.3" />
+</head>
+<body>
+  <div class="bg-fx" aria-hidden="true">
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-a"></div>
+    <div class="bg-glow bg-glow-b"></div>
+  </div>
+
+  <div class="page">
+
+    <header class="hero">
+      <div class="hero-left">
+        <img class="logo" src="assets/logo.svg" alt="ROLEPLAY ОБЗВОН" width="64" height="64" />
+        <div class="hero-text">
+          <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
+          <div class="hero-sub">СИСТЕМА ОБЗВОНА · ВЕРСИЯ 2.3</div>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="session-box">
+          <div class="session-id" id="sessionId">сессия — …</div>
+          <div class="session-timer" id="sessionTimer">00:00</div>
+          <div class="badge badge-idle" id="statusBadge">не начат</div>
+        </div>
+        <button type="button" class="icon-btn" id="btnSound" title="Звук">🔊</button>
+      </div>
+    </header>
+
+    <section class="panel curator-panel" id="curatorPanel">
+      <div class="panel-head" id="curatorHead">
+        <span class="panel-title">ПУЛЬТ КУРАТОРА</span>
+        <span class="panel-caret" id="curatorCaret">▸</span>
+      </div>
+      <div class="panel-body" id="curatorBody" hidden>
+        <div class="auth-row" id="authRow">
+          <input type="password" id="passInput" class="input" placeholder="код доступа" autocomplete="off" />
+          <button type="button" class="btn btn-ghost" id="btnAuth">Войти</button>
+        </div>
+
+        <div class="ctrl-row" id="ctrlRow" hidden>
+          <button type="button" class="btn btn-go" id="btnStart">▶ Начать обзвон</button>
+          <button type="button" class="btn btn-pause" id="btnPause" disabled>⏸ Пауза</button>
+          <button type="button" class="btn btn-danger" id="btnEnd" disabled>■ Завершить</button>
+          <button type="button" class="btn btn-ghost" id="btnFs">⛶ Во весь экран</button>
+          <button type="button" class="btn btn-ghost" id="btnReport">⬇ Отчёт</button>
+          <button type="button" class="btn btn-ghost" id="btnReset">↺ Сброс</button>
+        </div>
+
+        <div class="ctrl-row ctrl-small">
+          <label class="chk"><input type="checkbox" id="chkFsReq" /> требовать полный экран</label>
+          <label class="sel">порог доверия:
+            <select id="selThreshold">
+              <option value="50">50%</option>
+              <option value="60" selected>60%</option>
+              <option value="75">75%</option>
+            </select>
+          </label>
+          <label class="sel">калибровка:
+            <select id="selCalib">
+              <option value="6">6 (обычно)</option>
+              <option value="10">10 (тяжело)</option>
+              <option value="20">20 (очень тяжело)</option>
+              <option value="50" selected>50 (длинная проверка)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="auth-hint" id="authHint">код куратора хранится в README и в js/app.js (<b>CONFIG.passcode</b>) — на странице не показывается</div>
+      </div>
+    </section>
+
+    <section class="metrics" id="metrics">
+      <div class="metric m-conc">
+        <span>КОНЦЕНТРАЦИЯ</span>
+        <b id="concValue">100%</b>
+        <div class="bar"><i id="concBar"></i></div>
+      </div>
+      <div class="metric m-cheat">
+        <span>ЧИТОМЕРЯК</span>
+        <b id="cheatValue">0%</b>
+        <div class="bar"><i id="cheatBar"></i></div>
+      </div>
+      <div class="metric m-total">
+        <span>СРЕДНЯЯ КОНЦЕНТРАЦИЯ</span>
+        <b id="totalConc">—</b>
+        <div class="trend flat" id="concTrend">первый обзвон</div>
+      </div>
+      <div class="metric"><span>ФОКУС</span><b id="focusState" class="ok">ЕСТЬ</b></div>
+      <div class="metric"><span>СМЕНЫ ВКЛАДОК</span><b id="tabState">0</b></div>
+      <div class="metric"><span>ЭКРАНЫ</span><b id="screenCount">1</b></div>
+      <div class="metric"><span>РЕАКЦИЯ</span><b id="avgReaction">—</b></div>
+      <div class="metric"><span>СРЫВЫ ФОКУСА</span><b id="focusLosses">0</b></div>
+      <div class="metric"><span>ПРОСТОЙ</span><b id="idleHits">0</b></div>
+      <div class="metric"><span>НАРУШЕНИЯ</span><b id="violCount">0</b></div>
+    </section>
+
+    <section class="panel device-panel" id="devicePanel">
+      <div class="panel-head"><span class="panel-title">СИСТЕМА КАНДИДАТА</span><span class="live-dot" title="опрос каждые 3 с"></span></div>
+      <div class="panel-body">
+        <div class="device-grid">
+          <div class="device-item"><span>Устройство</span><b id="devKind">—</b></div>
+          <div class="device-item"><span>ОС</span><b id="devOs">—</b></div>
+          <div class="device-item"><span>Браузер</span><b id="devBrowser">—</b></div>
+          <div class="device-item"><span>Ввод</span><b id="devInput">—</b></div>
+          <div class="device-item"><span>Э-экран</span><b id="devScreen">—</b></div>
+          <div class="device-item"><span>Окно</span><b id="devViewport">—</b></div>
+          <div class="device-item"><span>Язык</span><b id="devLang">—</b></div>
+          <div class="device-item"><span>Сеть</span><b id="devNet">—</b></div>
+          <div class="device-item"><span>CPU / RAM</span><b id="devHw">—</b></div>
+        </div>
+        <div class="device-ua" id="devUa" title="User Agent"></div>
+      </div>
+    </section>
+
+    <section class="panel stats-panel" id="statsPanel">
+      <div class="panel-head"><span class="panel-title">ТАБЛИЦА РЕЗУЛЬТАТОВ</span><span class="panel-hint" id="chStat"></span></div>
+      <div class="panel-body stats-body">
+        <table class="stat-table" id="statTable"></table>
+        <table class="ch-table" id="chTable">
+          <thead><tr><th>№</th><th>ВИД</th><th>ИТОГ</th><th>РЕАКЦИЯ</th></tr></thead>
+          <tbody id="chTableBody"><tr class="ch-empty"><td colspan="4">испытаний не было</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="gate" id="gate">
+      <div class="gate-card">
+        <div class="gate-icon">◎</div>
+        <h2>ОБЗВОН НЕ ЗАПУЩЕН</h2>
+        <p id="gateText">Дождитесь команды куратора. Перед началом пройдите длинную проверку на внимательность — по умолчанию 50 заданий (можно сменить в пульте).</p>
+        <button type="button" class="btn btn-ghost" id="btnCalibrate">◎ Калибровка (6 испытаний)</button>
+        <div class="gate-status" id="calibStatus"></div>
+      </div>
+    </section>
+
+    <section class="panel playfield" id="playfield" hidden>
+      <div class="panel-head"><span class="panel-title">ИСПЫТАНИЕ ВНИМАНИЯ</span><span class="panel-hint" id="chRound"></span></div>
+      <div class="panel-body">
+        <div class="ch-timerbar"><i id="chBar"></i></div>
+        <div class="ch-task" id="chTask">ожидание…</div>
+        <div class="arena" id="arena">
+          <button type="button" class="ch-target" id="chTarget" hidden>ЦЕЛЬ</button>
+          <div class="stroop-row" id="stroopRow" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel part-panel" id="partPanel" hidden>
+      <div class="panel-body part-row">
+        <button type="button" class="btn btn-pause" id="btnPauseSelf">⏸ Пауза</button>
+        <button type="button" class="btn btn-danger" id="btnEndSelf">■ Завершить обзвон</button>
+        <span class="part-hint">пауза и завершение — по согласованию с куратором</span>
+      </div>
+    </section>
+
+    <section class="panel feed" id="feedPanel">
+      <div class="panel-head"><span class="panel-title">ЖУРНАЛ СОБЫТИЙ</span><span class="panel-hint" id="feedCount">0</span></div>
+      <div class="panel-body">
+        <ul class="feed-list" id="signalList">
+          <li class="feed-empty">событий нет</li>
+        </ul>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="overlay" id="pauseOverlay" hidden>
+    <div class="overlay-card">
+      <div class="tag">СЕССИЯ ПРИОСТАНОВЛЕНА</div>
+      <h2>Пауза</h2>
+      <p>Куратор поставил обзвон на паузу. Оставайтесь на странице — продолжение может быть в любой момент.</p>
+      <button type="button" class="btn btn-go" id="btnResume">Продолжить</button>
+    </div>
+  </div>
+
+  <div class="overlay overlay-lock" id="lockOverlay" hidden>
+    <div class="overlay-card">
+      <div class="tag tag-red">ДОСТУП ОГРАНИЧЕН</div>
+      <h2 id="lockTitle">Потеряно доверие системы</h2>
+      <p id="lockText"></p>
+      <div class="unlock-row">
+        <input type="password" id="unlockInput" class="input" placeholder="код куратора" autocomplete="off" />
+        <button type="button" class="btn btn-ghost" id="btnUnlock">Разблокировать</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay overlay-sum" id="sumOverlay" hidden>
+    <div class="overlay-card">
+      <div class="tag" id="sumTag">ИТОГ ОБЗВОНА</div>
+      <h2 id="sumVerdict">ЗАЧЁТ</h2>
+      <div class="ach-row" id="achRow"></div>
+      <table class="sum-table" id="sumTable"></table>
+      <div class="sum-btns">
+        <button type="button" class="btn btn-ghost" id="btnSumReport">⬇ Скачать отчёт</button>
+        <button type="button" class="btn btn-ghost" id="btnSumClose">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <div class="noise" aria-hidden="true"></div>
+
+  <script src="js/monitor.js?v=2.3"></script>
+  <script src="js/app.js?v=2.3"></script>
+  <div class="err-banner" id="errBanner" hidden></div>
+</body>
+</html>
