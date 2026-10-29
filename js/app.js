@@ -6,7 +6,7 @@
 
   /* ---------- настройки (меняйте здесь) ---------- */
   var CONFIG = {
-    appVersion: '2.6',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '2.7',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* код куратора хранится закодированным (XOR 90) — открытым текстом в коде не светится;
        смена: положите новый код в пароль-куратора.txt и перекодируйте (см. README) */
     passEnc: [21, 56, 32, 44, 53, 52, 119, 104, 106, 104, 108],
@@ -351,6 +351,15 @@
     }
     els.chTask.innerHTML = taskHtml;
     buildPad(kind);   /* экранная панель — ответ с телефона без физической клавиатуры */
+    /* телефон: если испытание не помещается в экран — подскроллить сразу, не тратя таймер */
+    try {
+      if (els.playfield.scrollIntoView) {
+        var rPf = els.playfield.getBoundingClientRect();
+        if (rPf.top < 4 || rPf.bottom > (window.innerHeight || 9999)) {
+          els.playfield.scrollIntoView({ block: 'center' });
+        }
+      }
+    } catch (eView) {}
 
     /* таймер испытания */
     els.chBar.style.transition = 'none';
@@ -535,7 +544,12 @@
       hb.addEventListener('pointerdown', down);
       hb.addEventListener('pointerup', up);
       hb.addEventListener('pointercancel', up);
-      hb.addEventListener('pointerleave', up);
+      /* уход курсора = отпустили, но НЕ для касания: на телефоне палец может
+         немного сдвинуться — касание держится до touchend/touchcancel */
+      hb.addEventListener('pointerleave', function (ev) {
+        if (ev && ev.pointerType === 'touch') return;
+        up(ev);
+      });
       hb.addEventListener('touchstart', down, { passive: false });
       hb.addEventListener('touchend', up, { passive: false });
       hb.addEventListener('touchcancel', up, { passive: false });

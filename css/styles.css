@@ -197,13 +197,15 @@ select{font-family:var(--mono);font-size:12px;color:var(--txt);background:rgba(4
 .ch-target{position:absolute;padding:14px 22px;border:none;border-radius:12px;cursor:pointer;
   font-family:var(--mono);font-weight:700;letter-spacing:2px;color:#04121c;
   background:linear-gradient(135deg,var(--acc2),var(--acc));box-shadow:0 0 24px rgba(52,231,255,.5);
-  transition:left .18s ease,top .18s ease}
+  transition:left .18s ease,top .18s ease;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;user-select:none}
 .ch-target.small{padding:7px 11px;font-size:11px;letter-spacing:1px;transition:left .32s ease,top .32s ease}
 .stroop-row{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:14px;
   flex-wrap:wrap;padding:12px}
 .ch-btn{padding:16px 20px;border:none;border-radius:12px;cursor:pointer;font-family:var(--mono);
   font-weight:700;letter-spacing:1px;color:#04121c;transition:transform .15s;
-  box-shadow:0 0 20px rgba(255,255,255,.12)}
+  box-shadow:0 0 20px rgba(255,255,255,.12);touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;user-select:none}
 .ch-btn:hover{transform:scale(1.07)}
 .stroop-word{font-family:var(--mono);font-size:clamp(24px,5vw,36px);font-weight:800;letter-spacing:5px;
   text-align:center;padding:10px 0;text-shadow:0 0 22px currentColor}
@@ -214,6 +216,8 @@ select{font-family:var(--mono);font-size:12px;color:var(--txt);background:rgba(4
 .ch-pad{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:8px;margin-top:12px;
   padding:12px;border-radius:14px;border:1px solid var(--line);background:rgba(8,13,24,.72)}
 .ch-pad[hidden]{display:none}
+/* пока видна экранная панель — пустая арена не занимает место на телефоне */
+.ch-pad:not([hidden]) ~ .arena{display:none}
 .pad-key{min-height:48px;border:1px solid var(--line);border-radius:10px;background:var(--card2);
   color:var(--acc);font-family:var(--mono);font-size:17px;font-weight:700;cursor:pointer;
   transition:transform .1s,background .15s,border-color .15s;touch-action:manipulation;
@@ -321,13 +325,13 @@ select{font-family:var(--mono);font-size:12px;color:var(--txt);background:rgba(4
   h1{white-space:normal}
   .input{width:100%}
   .auth-row{flex-direction:column}
-  .arena{height:180px}
+  .arena{height:130px}
   /* телефон: крупные тач-цели для экранной панели */
   .ch-task{font-size:14px;padding:10px 4px;min-height:44px}
   .ch-task b{font-size:22px}
-  .ch-pad{grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;padding:9px}
-  .pad-key{min-height:52px;font-size:18px}
-  .hold-btn{min-height:96px;font-size:21px}
+  .ch-pad{grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:7px;padding:10px}
+  .pad-key{min-height:54px;font-size:18px}
+  .hold-btn{min-height:104px;font-size:21px}
   .ch-btn{padding:18px 22px;min-height:64px}
   .panel-body{padding:12px}
 }
