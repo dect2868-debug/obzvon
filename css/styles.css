@@ -618,6 +618,92 @@ h1 span{background-image:linear-gradient(90deg,var(--acc),var(--acc3),var(--vio)
 /* ---------- наклон карточек по курсору (3D) ---------- */
 .metric{will-change:transform}
 
+/* ============================================================
+   ОБЗВОН v3.2 · НОВЫЙ ИНТЕРФЕЙС — боковая панель + топбар
+   ============================================================ */
+.shell{display:flex;min-height:100vh;align-items:stretch}
+
+/* ---------- боковая панель ---------- */
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:248px;z-index:30;
+  display:flex;flex-direction:column;gap:18px;padding:20px 16px;
+  background:linear-gradient(180deg,rgba(11,17,33,.94),rgba(7,11,22,.97));
+  backdrop-filter:blur(16px) saturate(1.2);
+  border-right:1px solid transparent;
+  border-image:linear-gradient(180deg,rgba(255,77,216,.5),rgba(52,231,255,.35) 45%,rgba(139,92,246,.4)) 1;
+  box-shadow:14px 0 44px rgba(0,0,0,.45)}
+.side-brand{display:flex;align-items:center;gap:12px}
+.side-brand .logo-wrap{position:relative;display:inline-grid;place-items:center;flex-shrink:0}
+.side-brand .logo{width:46px;height:46px;filter:drop-shadow(0 0 12px rgba(52,231,255,.55));
+  animation:pulse 3.2s ease-in-out infinite,logoFloat 5.4s ease-in-out infinite}
+.side-brand-text{min-width:0}
+.side-brand h1{font-size:15px;letter-spacing:1.5px;line-height:1.25;white-space:normal;font-weight:800}
+.side-brand h1 span{display:block}
+.side-brand .hero-sub{font-family:var(--mono);font-size:9px;letter-spacing:3px;color:var(--dim);margin-top:3px}
+
+.side-nav{display:flex;flex-direction:column;gap:5px;flex:1;min-height:0;overflow-y:auto}
+.nav-link{position:relative;display:flex;align-items:center;gap:11px;
+  padding:11px 13px;border-radius:11px;text-decoration:none;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;
+  color:var(--dim);border:1px solid transparent;transition:.18s}
+.nav-link i{font-style:normal;font-size:14px;width:18px;text-align:center;filter:grayscale(.6);opacity:.8}
+.nav-link:hover{color:var(--txt);background:rgba(52,231,255,.07);border-color:rgba(52,231,255,.22)}
+.nav-link.active{color:#04121c;background:linear-gradient(135deg,var(--acc),var(--acc3));
+  box-shadow:0 6px 20px rgba(255,77,216,.28),0 0 16px rgba(52,231,255,.22);font-weight:700}
+.nav-link.active i{filter:none;opacity:1}
+.nav-link.active::before{content:'';position:absolute;left:-16px;top:20%;height:60%;width:3px;
+  border-radius:3px;background:var(--acc3);box-shadow:0 0 10px var(--acc3)}
+
+.side-foot{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;
+  padding:11px 10px;border-radius:12px;border:1px solid var(--line);
+  background:rgba(10,17,30,.6);font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--dim)}
+.side-scrim{position:fixed;inset:0;z-index:29;background:rgba(2,4,9,.72);backdrop-filter:blur(3px)}
+
+/* ---------- основная часть ---------- */
+.main{flex:1;min-width:0;margin-left:248px;display:flex;flex-direction:column}
+
+/* ---------- топбар ---------- */
+.topbar{position:sticky;top:0;z-index:25;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:12px 22px;min-height:70px;
+  background:linear-gradient(180deg,rgba(9,14,27,.95),rgba(9,14,27,.82));
+  backdrop-filter:blur(14px) saturate(1.15);
+  border-bottom:1px solid transparent;
+  border-image:linear-gradient(90deg,rgba(52,231,255,.55),rgba(255,77,216,.45),rgba(139,92,246,.4),transparent) 1;
+  box-shadow:0 12px 34px rgba(0,0,0,.4)}
+.topbar-brand{display:none;align-items:center;gap:9px;font-family:var(--mono);
+  font-size:11px;letter-spacing:2.5px;color:var(--acc)}
+.logo-mini{filter:drop-shadow(0 0 8px rgba(52,231,255,.6))}
+.topbar .session-box{margin-left:auto;text-align:right}
+.topbar .icon-btn{flex-shrink:0}
+.burger{display:none;font-size:17px}
+
+/* ---------- сетка страницы ---------- */
+.page{max-width:1180px;width:100%;margin:0 auto;padding:22px 24px 80px;
+  display:flex;flex-direction:column;gap:16px}
+.page section{scroll-margin-top:88px}
+
+/* ---------- адаптив: боковая панель → шторка ---------- */
+@media (max-width:980px){
+  .sidebar{transform:translateX(-102%);transition:transform .28s cubic-bezier(.2,.8,.3,1);
+    box-shadow:none;border-image:none;border-right:1px solid var(--line)}
+  .sidebar.open{transform:none;box-shadow:24px 0 60px rgba(0,0,0,.6)}
+  .main{margin-left:0}
+  .burger{display:block}
+  .topbar-brand{display:flex}
+  .topbar .session-box{margin-left:auto}
+  .page{padding:16px 14px 90px}
+}
+@media (max-width:640px){
+  .topbar{padding:10px 14px;gap:10px;min-height:0}
+  .topbar-brand span{display:none}
+  .topbar .session-box{text-align:left;order:3;width:100%;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .topbar .session-id,.topbar .session-start{display:none}
+  .topbar .session-timer{font-size:26px}
+  .topbar .badge{margin-top:0}
+  .side-nav .nav-link{padding:13px 14px;font-size:12.5px}
+}
+
 /* ---------- деликатность к настройке «меньше движения» ---------- */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{
