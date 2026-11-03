@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.1 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v4.2 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '4.1',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '4.2',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -140,8 +140,39 @@
     'archCards','archChart','archCompare','archTable','archCount',
     'btnArchCsv','btnArchClear',
     'healthGrid','healthScore','healthRepair','healthLog',
-    'btnHealthCheck','btnHealthRepair','btnHealthReport','btnHealthClear','btnHealthRestart']
+    'btnHealthCheck','btnHealthRepair','btnHealthReport','btnHealthClear','btnHealthRestart',
+    'adminGate','adminBody','adminPass','btnAdminAuth','btnAdminLock','adminUpdateInfo',
+    'btnAdminCheck','btnAdminUpdate','btnAdminStress','btnAdminStressSmall','btnAdminPurge','adminStress','adminLock']
    .forEach(function (id) { els[id] = $(id); });
+
+  /* ---------- реестр слушателей и таймеров (v4.2) ----------
+     Нужен для чистого перезапуска: старый экземпляр приложения обязан
+     освободить всё, иначе после фонового обновления события
+     обрабатывались бы дважды (двойные штрафы, двойные реакции). */
+  var LISTENERS = [];
+  var TIMERS = [];
+
+  function on(target, type, fn, opts) {
+    if (!target || !target.addEventListener) return;
+    target.addEventListener(type, fn, opts);
+    LISTENERS.push([target, type, fn, opts]);
+  }
+  function every(ms, fn) {
+    var id = setInterval(fn, ms);
+    TIMERS.push(id);
+    return id;
+  }
+  function shutdown() {
+    var i;
+    for (i = 0; i < TIMERS.length; i++) clearInterval(TIMERS[i]);
+    TIMERS = [];
+    for (i = 0; i < LISTENERS.length; i++) {
+      var L = LISTENERS[i];
+      try { L[0].removeEventListener(L[1], L[2], L[3]); } catch (e) {}
+    }
+    LISTENERS = [];
+    return true;
+  }
 
   /* ---------- состояние ---------- */
   var ST = {
@@ -407,7 +438,7 @@
   /* делегирование кликов по заголовкам столбцов */
   function bindSort(table, state, after) {
     if (!table) return;
-    table.addEventListener('click', function (e) {
+    on(table, 'click', function (e) {
       var t = e.target;
       var th = t && t.closest ? t.closest('th[data-sort]') : null;
       if (!th || !table.contains(th)) return;
@@ -540,7 +571,7 @@
         var b2 = document.createElement('button');
         b2.type = 'button'; b2.className = 'ch-btn'; b2.textContent = c[0];
         b2.style.background = c[1];
-        b2.addEventListener('click', function () {
+        on(b2, 'click', function () {
           if (CH.active && CH.kind === 'stroop') endChallenge(idx === CH.answerColor, 'не тот цвет');
         });
         els.stroopRow.appendChild(b2);
@@ -655,6 +686,8 @@
       }
     }
     updateMetrics();
+    /* отложенное обновление — применяем, когда испытание закончилось */
+    if (upd.deferred && !CH.active) { upd.deferred = false; applyUpdate(); }
     /* события в журнале: сеансовые испытания целиком, калибровка — только итогом */
     if (window.Live && !CH.calib) Live.mark(ok ? 'ok' : 'fail');
     if (CH.calib) {
@@ -729,13 +762,13 @@
     }
   }
 
-  document.addEventListener('keydown', function (e) {
+  on(document, 'keydown', function (e) {
     if (!CH.active) return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
     if (CH.kind === 'hold' && e.code === 'Space') { e.preventDefault(); holdDown(); return; }
     codePress(e.code);
   });
-  document.addEventListener('keyup', function (e) {
+  on(document, 'keyup', function (e) {
     if (e.code === 'Space') holdUp();
   });
 
@@ -749,18 +782,18 @@
       hb.type = 'button'; hb.className = 'hold-btn'; hb.textContent = 'УДЕРЖИВАЙТЕ';
       var down = function (ev) { ev.preventDefault(); holdDown(); };
       var up = function (ev) { ev.preventDefault(); holdUp(); };
-      hb.addEventListener('pointerdown', down);
-      hb.addEventListener('pointerup', up);
-      hb.addEventListener('pointercancel', up);
+      on(hb, 'pointerdown', down);
+      on(hb, 'pointerup', up);
+      on(hb, 'pointercancel', up);
       /* уход курсора = отпустили, но НЕ для касания: на телефоне палец может
          немного сдвинуться — касание держится до touchend/touchcancel */
-      hb.addEventListener('pointerleave', function (ev) {
+      on(hb, 'pointerleave', function (ev) {
         if (ev && ev.pointerType === 'touch') return;
         up(ev);
       });
-      hb.addEventListener('touchstart', down, { passive: false });
-      hb.addEventListener('touchend', up, { passive: false });
-      hb.addEventListener('touchcancel', up, { passive: false });
+      on(hb, 'touchstart', down, { passive: false });
+      on(hb, 'touchend', up, { passive: false });
+      on(hb, 'touchcancel', up, { passive: false });
       els.chPad.appendChild(hb);
       els.chPad.hidden = false;
       return;
@@ -771,12 +804,12 @@
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'pad-key'; b.textContent = ch;
       var code = /^[A-Z]$/.test(ch) ? 'Key' + ch : 'Digit' + ch;
-      b.addEventListener('click', function () { codePress(code); });
+      on(b, 'click', function () { codePress(code); });
       els.chPad.appendChild(b);
     });
     els.chPad.hidden = false;
   }
-  els.chTarget.addEventListener('click', function () { if (CH.active && CH.kind === 'target') endChallenge(true, ''); });
+  on(els.chTarget, 'click', function () { if (CH.active && CH.kind === 'target') endChallenge(true, ''); });
 
   /* ============================================================
      СЕССИЯ
@@ -966,8 +999,6 @@
     els.sumOverlay.hidden = false;
     if (verdict === 'ЗАЧЁТ') sndGood(); else sndBad();
     toast('Средняя концентрация обновлена: ' + totAvg + '%', 'good', 4200);
-    /* если ждали обновление — применяем его после итогов (обзвон не прерывается) */
-    if (upd.pending) { upd.pending = false; startAutoUpdate(CONFIG.postSessionUpdateMs); }
     feedAdd({ time: ts(), label: 'Обзвон завершён · вердикт: ' + verdict + ' · ср. концентрация ' + totAvg + '% · фишек: ' + achList.length, sev: verdict === 'ЗАЧЁТ' ? 0 : 2 });
     clearState();
   }
@@ -1179,7 +1210,7 @@
       el.requestFullscreen().catch(function () {});
     }
   }
-  document.addEventListener('fullscreenchange', function () {
+  on(document, 'fullscreenchange', function () {
     if (!document.fullscreenElement && ST.state === 'running' && els.chkFsReq.checked) {
       Monitor.penalty('Выход из полноэкранного режима', 3);
     }
@@ -1272,7 +1303,20 @@
     S.focusLosses = d.focusLosses || 0; S.idleHits = d.idleHits || 0;
     S.missChallenges = d.missChallenges || 0; S.reactions = d.reactions || []; S.screens = d.screens || 1;
     Monitor.setRunning(true);
-    Monitor.addReloadGuardPenalty();
+    /* обновление, применённое системой, — не перезагрузка, наказания нет */
+    var cleanUpdate = false;
+    try {
+      cleanUpdate = !!sessionStorage.getItem('obzvon_v2_clean_update');
+      sessionStorage.removeItem('obzvon_v2_clean_update');
+    } catch (eCU) {}
+    if (cleanUpdate) {
+      feedAdd({ time: ts(), label: 'Применено фоновое обновление системы — сессия продолжена', sev: 0 });
+      toast('Сайт обновлён до версии ' + CONFIG.appVersion + ' — обзвон продолжается', 'good', 5000);
+    } else {
+      Monitor.addReloadGuardPenalty();
+      feedAdd({ time: ts(), label: 'Сессия восстановлена после перезагрузки (+6)', sev: 2 });
+      toast('Обнаружена перезагрузка страницы во время обзвона! +6 к «читомеряку»', 'bad', 5200);
+    }
     if (tampered) {
       ST.integrityOk = false;
       S.score += 20;
@@ -1281,19 +1325,17 @@
       toast('Обнаружена подмена данных сессии! +20 к «читомеряку»', 'bad', 6000);
     }
     if (window.Live) { Live.reset(); Live.start(); }
-    feedAdd({ time: ts(), label: 'Сессия восстановлена после перезагрузки (+6)', sev: 2 });
-    toast('Обнаружена перезагрузка страницы во время обзвона! +6 к «читомеряку»', 'bad', 5200);
     scheduleNext();
     updateMetrics();
   }
 
-  window.addEventListener('beforeunload', function () {
+  on(window, 'beforeunload', function () {
     if (['running', 'paused', 'locked'].indexOf(ST.state) >= 0) {
       saveState();
       return 'Обзвон ещё не завершён!';
     }
   });
-  setInterval(saveState, 2500);
+  every(2500, saveState);
 
   /* ---------- отчёт ---------- */
   function downloadReport() {
@@ -1374,9 +1416,9 @@
     fr.readAsText(file);
   }
 
-  if (els.btnExportStats) els.btnExportStats.addEventListener('click', exportStats);
-  if (els.btnImportStats) els.btnImportStats.addEventListener('click', function () { els.importFile.click(); });
-  if (els.importFile) els.importFile.addEventListener('change', function () {
+  if (els.btnExportStats) on(els.btnExportStats, 'click', exportStats);
+  if (els.btnImportStats) on(els.btnImportStats, 'click', function () { els.importFile.click(); });
+  if (els.importFile) on(els.importFile, 'change', function () {
     var f = els.importFile.files && els.importFile.files[0];
     importStats(f);
     els.importFile.value = '';
@@ -1385,14 +1427,14 @@
   /* ============================================================
      ПУЛЬТ КУРАТОРА
      ============================================================ */
-  els.curatorHead.addEventListener('click', function () {
+  on(els.curatorHead, 'click', function () {
     var open = els.curatorBody.hidden;
     els.curatorBody.hidden = !open;
     els.curatorCaret.classList.toggle('open', open);
   });
 
-  els.btnAuth.addEventListener('click', doAuth);
-  els.passInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doAuth(); });
+  on(els.btnAuth, 'click', doAuth);
+  on(els.passInput, 'keydown', function (e) { if (e.key === 'Enter') doAuth(); });
 
   /* защита от перебора кода */
   var authFails = 0, authLockedUntil = 0;
@@ -1426,14 +1468,14 @@
     }
   }
 
-  els.btnStart.addEventListener('click', startSession);
+  on(els.btnStart, 'click', startSession);
 
   /* логотип: счётчик нажатий (для аналитики дублей кликов) */
   (function () {
     var logo = document.querySelector('.logo');
     if (!logo) return;
     var taps = 0, tmr = null, need = (0x14 >> 2) + ((0x9 & 0x1) * 0);
-    logo.addEventListener('click', function () {
+    on(logo, 'click', function () {
       if (ST.state !== 'idle') return;
       taps++;
       clearTimeout(tmr);
@@ -1450,18 +1492,18 @@
       }
     });
   })();
-  els.btnPause.addEventListener('click', pauseSession);
-  els.btnResume.addEventListener('click', resumeSession);
-  els.btnEnd.addEventListener('click', function () {
+  on(els.btnPause, 'click', pauseSession);
+  on(els.btnResume, 'click', resumeSession);
+  on(els.btnEnd, 'click', function () {
     if (ST.state === 'idle' || ST.state === 'calib') { toast('Обзвон ещё не начат', 'bad'); return; }
     endSession();
   });
-  els.btnFs.addEventListener('click', goFullscreen);
-  els.btnReport.addEventListener('click', downloadReport);
-  els.btnSumReport.addEventListener('click', downloadReport);
-  els.btnSumClose.addEventListener('click', function () { els.sumOverlay.hidden = true; resetAll(); });
-  els.btnReset.addEventListener('click', resetAll);
-  els.selThreshold.addEventListener('change', function () { ST.threshold = parseInt(els.selThreshold.value, 10); });
+  on(els.btnFs, 'click', goFullscreen);
+  on(els.btnReport, 'click', downloadReport);
+  on(els.btnSumReport, 'click', downloadReport);
+  on(els.btnSumClose, 'click', function () { els.sumOverlay.hidden = true; resetAll(); });
+  on(els.btnReset, 'click', resetAll);
+  on(els.selThreshold, 'change', function () { ST.threshold = parseInt(els.selThreshold.value, 10); });
 
   /* сортировка таблиц результатов (v3.8) */
   bindSort(els.statTable, statSort, updateTables);
@@ -1472,7 +1514,7 @@
     els.btnCalibrate.textContent = '◎ Калибровка (' + CONFIG.calibCount + ' испытаний)';
   }
   if (els.selCalib) { els.selCalib.value = String(CONFIG.calibCount); }
-  els.selCalib.addEventListener('change', function () {
+  on(els.selCalib, 'change', function () {
     if (ST.state !== 'idle') {
       els.selCalib.value = String(CONFIG.calibCount);
       toast('Сначала завершите текущую калибровку', 'bad');
@@ -1485,7 +1527,7 @@
   });
 
   /* кнопки участника: пауза и завершение */
-  els.btnPauseSelf.addEventListener('click', function () {
+  on(els.btnPauseSelf, 'click', function () {
     if (ST.state === 'running') {
       pauseSession();
       toast('Обзвон на паузе — продолжите по согласованию с куратором', '');
@@ -1493,7 +1535,7 @@
       resumeSession();
     }
   });
-  els.btnEndSelf.addEventListener('click', function () {
+  on(els.btnEndSelf, 'click', function () {
     if (['running', 'paused', 'locked'].indexOf(ST.state) < 0) { toast('Обзвон ещё не начат', 'bad'); return; }
     var okEnd = true;
     if (typeof window.confirm === 'function' && !/jsdom/i.test(navigator.userAgent || '')) {
@@ -1503,16 +1545,16 @@
     feedAdd({ time: ts(), label: 'Участник завершил обзвон самостоятельно', sev: 1 });
     endSession();
   });
-  els.chkFsReq.addEventListener('change', function () {
+  on(els.chkFsReq, 'change', function () {
     if (els.chkFsReq.checked && ST.state === 'running') goFullscreen();
   });
-  els.btnSound.addEventListener('click', function () {
+  on(els.btnSound, 'click', function () {
     ST.muted = !ST.muted;
     els.btnSound.textContent = ST.muted ? '🔇' : '🔊';
     els.btnSound.classList.toggle('off', ST.muted);
   });
 
-  els.btnUnlock.addEventListener('click', function () {
+  on(els.btnUnlock, 'click', function () {
     if (authLocked()) {
       toast('Слишком много неверных попыток — подождите', 'bad');
       return;
@@ -1538,9 +1580,9 @@
       els.unlockInput.value = '';
     }
   });
-  els.unlockInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') els.btnUnlock.click(); });
+  on(els.unlockInput, 'keydown', function (e) { if (e.key === 'Enter') els.btnUnlock.click(); });
 
-  els.btnCalibrate.addEventListener('click', function () {
+  on(els.btnCalibrate, 'click', function () {
     if (ST.state !== 'idle') { toast('Сейчас это недоступно', 'bad'); return; }
     ST.state = 'calib'; ST.calibDone = 0; ST.calibFails = 0;
     CH_LOG = [];           /* новая калибровка — чистый журнал */
@@ -1732,19 +1774,19 @@
         : 'квота недоступна');
     }).catch(function () {});
   }
-  setInterval(updateMemUI, 3000);
-  setInterval(updateStorageUI, 15000);
+  every(3000, updateMemUI);
+  every(15000, updateStorageUI);
   updateMemUI();
   updateStorageUI();
 
   /* защита контекстного меню на всём документе (даже вне сессии) */
-  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  on(document, 'contextmenu', function (e) { e.preventDefault(); });
 
   /* кнопка калибровки — количество из конфига */
   syncCalibBtn();
 
   /* ---------- видимая диагностика ошибок скриптов ---------- */
-  window.addEventListener('error', function (e) {
+  on(window, 'error', function (e) {
     var b = els.errBanner;
     if (!b) return;
     b.textContent = 'Ошибка скрипта: ' + (e.message || 'неизвестно') + ' · обновите страницу (Ctrl+F5)';
@@ -1760,14 +1802,17 @@
      и авто-обновление: вне сессии — сразу, во время сессии —
      сразу после её завершения (обзвон не прерывается).
      ============================================================ */
-  var upd = { found: null, left: 0, timer: null, applying: false, pending: false };
+  var upd = { found: null, left: 0, timer: null, applying: false, pending: false, deferred: false, notes: '' };
 
-  function showUpdateBanner(newV) {
+  function showUpdateBanner(newV, notes) {
     upd.found = newV;
+    upd.notes = notes || '';
     if (els.updBanner) {
       els.updBanner.hidden = false;
       els.updTitle.textContent = 'Доступна новая версия ' + newV;
-      els.updSub.textContent = 'установлена ' + CONFIG.appVersion + ' · обновление не прервёт обзвон';
+      els.updSub.textContent = (upd.notes
+        ? upd.notes + ' · '
+        : '') + 'установлена ' + CONFIG.appVersion + ' · обновление не прервёт обзвон';
     }
     if (els.verBadge) els.verBadge.classList.add('has-update');
     startAutoUpdate();
@@ -1779,12 +1824,8 @@
 
   function startAutoUpdate(delayMs) {
     if (upd.timer) return;
-    var inSession = ['running', 'paused', 'locked'].indexOf(ST.state) >= 0;
-    if (inSession) {
-      upd.pending = true;
-      if (els.updCount) els.updCount.textContent = 'обновление после обзвона';
-      return;
-    }
+    /* обновление применяется в фоне: если идёт испытание — ждём его конца,
+       но сама сессия продолжается (v4.2) */
     var total = Math.ceil((delayMs || CONFIG.autoUpdateMs) / 1000);
     upd.left = total;
     if (els.updCount) els.updCount.textContent = 'обновление через ' + total + ' с';
@@ -1795,19 +1836,78 @@
     }, 1000);
   }
 
-  function applyUpdate() {
-    if (upd.applying) return;
-    upd.applying = true;
-    stopAutoUpdate();
+  /* ---------- фоновое обновление (v4.2) ----------
+     Новый код подгружается прямо в работающей странице: старый экземпляр
+     освобождает ресурсы, модули перезапускаются с новыми адресами
+     (метка времени обходит кэш браузера). Страница не перезагружается —
+     обзвон не прерывается. Если что-то пошло не так — есть запасной
+     вариант с обычной перезагрузкой. */
+  var MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
+                 'js/archive.js', 'js/health.js', 'js/app.js'];
+
+  function fallbackReload(v) {
     try {
-      var v = encodeURIComponent(upd.found || CONFIG.appVersion);
       var sep = location.search ? '&' : '?';
-      var url = location.pathname + location.search + sep + 'obzupd=' + v + location.hash;
+      var url = location.pathname + location.search + sep + 'obzupd=' + encodeURIComponent(v) + location.hash;
       try { window.__obzLastNav = url; } catch (eNav) {}
       location.replace(url);
     } catch (e) {
       try { location.reload(); } catch (e2) {}
     }
+  }
+
+  function applyUpdate() {
+    if (upd.applying) return false;
+    var newV = upd.found || CONFIG.appVersion;
+    /* ждём конца текущего испытания — участника не обрываем */
+    if (CH.active) {
+      upd.deferred = true;
+      if (els.updCount) els.updCount.textContent = 'обновление после испытания';
+      return false;
+    }
+    upd.applying = true;
+    stopAutoUpdate();
+    try { saveState(); } catch (e) {}
+    try { sessionStorage.setItem('obzvon_v2_clean_update', String(Date.now())); } catch (e2) {}
+
+    /* 1) освобождаем ресурсы старого экземпляра */
+    try { shutdown(); } catch (e3) {}
+    try { if (window.Monitor && Monitor.stop) Monitor.stop(); } catch (e4) {}
+    try { if (window.Live && Live.stop) Live.stop(); } catch (e5) {}
+    try { if (window.FX && FX.stop) FX.stop(); } catch (e6) {}
+    try { if (window.Health && Health.stop) Health.stop(); } catch (e7) {}
+    try { if (window.Archive && Archive.stop) Archive.stop(); } catch (e8) {}
+
+    /* 2) свежие стили */
+    var stamp = Date.now();
+    try {
+      var links = document.querySelectorAll('link[rel="stylesheet"][href]');
+      for (var i = 0; i < links.length; i++) {
+        var href = links[i].getAttribute('href');
+        if (href && href.indexOf('css/') >= 0) {
+          links[i].setAttribute('href', href.replace(/(\?v=[^&]*)/, '$1&t=' + stamp));
+        }
+      }
+    } catch (eCss) {}
+
+    /* 3) перезапуск модулей с новыми адресами — код обновляется на лету */
+    var i2 = 0;
+    var failed = 0;
+    (function next() {
+      if (i2 >= MODULES.length) {
+        upd.applying = false;
+        if (failed) fallbackReload(newV);
+        return;
+      }
+      var f = MODULES[i2++];
+      var sc = document.createElement('script');
+      sc.src = f + '?v=' + encodeURIComponent(newV) + '&t=' + stamp;
+      sc.async = false;
+      sc.onload = function () { setTimeout(next, 0); };
+      sc.onerror = function () { failed++; setTimeout(next, 0); };
+      document.body.appendChild(sc);
+    })();
+    return true;
   }
 
   /* ---------- авто-проверка обновлений (только при раздаче по http) ---------- */
@@ -1820,7 +1920,7 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (d && d.v && d.v !== CONFIG.appVersion) {
-          showUpdateBanner(d.v);
+          showUpdateBanner(d.v, d.notes || '');
         } else if (manual) {
           toast('Обновлений нет — установлена свежая версия ' + CONFIG.appVersion, 'good');
         }
@@ -1830,20 +1930,20 @@
       });
   }
   setTimeout(function () { checkUpdates(false); }, 5000);
-  setInterval(function () { checkUpdates(false); }, CONFIG.updateCheckMs);
+  every(CONFIG.updateCheckMs, function () { checkUpdates(false); });
 
-  if (els.btnUpdateNow) els.btnUpdateNow.addEventListener('click', applyUpdate);
-  if (els.btnUpdateLater) els.btnUpdateLater.addEventListener('click', function () {
+  if (els.btnUpdateNow) on(els.btnUpdateNow, 'click', applyUpdate);
+  if (els.btnUpdateLater) on(els.btnUpdateLater, 'click', function () {
     if (els.updBanner) els.updBanner.hidden = true;
     stopAutoUpdate();
     if (els.verBadge) els.verBadge.classList.remove('has-update');
     toast('Обновление отложено', '');
   });
-  if (els.btnUpdate) els.btnUpdate.addEventListener('click', function () { checkUpdates(true); });
+  if (els.btnUpdate) on(els.btnUpdate, 'click', function () { checkUpdates(true); });
   if (els.verBadge) {
     els.verBadge.style.cursor = 'pointer';
     els.verBadge.title = 'Проверить обновления';
-    els.verBadge.addEventListener('click', function () { checkUpdates(true); });
+    on(els.verBadge, 'click', function () { checkUpdates(true); });
   }
 
   /* ---------- проверка целостности кода (v3.8 → v4.0) ----------
@@ -1904,7 +2004,7 @@
     }
   }
   codeGuard();
-  setInterval(codeGuard, CONFIG.integrityCheckMs);
+  every(CONFIG.integrityCheckMs, codeGuard);
 
   /* ---------- диагностика (только чтение) ----------
      Небольшой публичный API без доступа к коду куратора и без
@@ -1945,6 +2045,142 @@
     }
   }, 5000);
 
+  /* ============================================================
+     АДМИНКА (v4.2) — самообслуживание и управление обновлениями
+     Открывается по коду куратора. Здесь: состояние системы,
+     фоновое обновление, починка, перезапуск и локальный стресс-тест.
+     ============================================================ */
+  var admin = { authed: false, stress: null, latest: null, notes: '' };
+
+  function adminRender() {
+    if (!els.adminBody) return;
+    els.adminBody.hidden = !admin.authed;
+    if (els.adminGate) els.adminGate.hidden = admin.authed;
+    if (els.adminLock) els.adminLock.hidden = admin.authed;
+    /* блокировка пункта меню до входа */
+    var link = document.querySelector('.nav-link[data-view="health"]');
+    if (link) link.classList.toggle('locked', !admin.authed);
+  }
+
+  function adminToast(msg, cls) { toast(msg, cls || ''); }
+
+  function adminAuth() {
+    if (authLocked()) {
+      adminToast('Слишком много неверных попыток — ввод заблокирован', 'bad');
+      return;
+    }
+    if (passMatch(els.adminPass.value)) {
+      authFails = 0;
+      admin.authed = true;
+      els.adminPass.value = '';
+      adminRender();
+      adminToast('Админка открыта', 'good');
+      if (window.Health) Health.check();
+    } else {
+      authFails++;
+      var left = CONFIG.authFailsLimit - authFails;
+      if (left <= 0) {
+        authLockedUntil = Date.now() + CONFIG.authLockMs;
+        authFails = 0;
+        adminToast('Неверный код! Ввод заблокирован на ' + Math.round(CONFIG.authLockMs / 1000) + ' с', 'bad', 4000);
+      } else {
+        adminToast('Неверный код доступа · осталось попыток: ' + left, 'bad');
+      }
+      els.adminPass.value = '';
+    }
+  }
+
+  function adminLock() {
+    admin.authed = false;
+    adminRender();
+    adminToast('Админка закрыта', '');
+  }
+
+  /* ---------- управление обновлениями ---------- */
+  function adminCheckUpdates() {
+    checkUpdates(true);
+    setTimeout(function () {
+      var t = $('adminUpdateInfo');
+      if (!t) return;
+      var latest = upd.found || CONFIG.appVersion;
+      t.innerHTML = 'установлена <b>v' + CONFIG.appVersion + '</b> · доступна <b>v' + latest + '</b>' +
+        (upd.notes ? '<br><span class="dim2">' + esc(upd.notes) + '</span>' : '');
+    }, 400);
+  }
+
+  function adminApplyUpdate() {
+    if (!upd.found) { adminToast('Новых версий не найдено', ''); return; }
+    if (upd.applying) { adminToast('Обновление уже применяется', ''); return; }
+    var v = upd.found;
+    upd.found = v;
+    var ok = applyUpdate();
+    adminToast(ok ? ('Обновление до v' + v + ' применяется в фоне — обзвон не прерывается')
+                   : ('Обновление отложено до конца текущего испытания'), 'good');
+  }
+
+  /* ---------- локальный стресс-тест (нагрузка внутри страницы) ---------- */
+  function adminStressTest(n) {
+    n = n || 20000;
+    var t0 = Date.now();
+    var i;
+    /* 1) поток событий ввода */
+    for (i = 0; i < n; i++) {
+      var ev = new MouseEvent('mousemove', { bubbles: true, clientX: i % 900, clientY: (i * 7) % 600 });
+      document.body.dispatchEvent(ev);
+    }
+    var tEvents = Date.now() - t0;
+    /* 2) поток нарушений (проверка живучести журналов) */
+    var t1 = Date.now();
+    var viol = 1000;
+    for (i = 0; i < viol; i++) Monitor.penalty('стресс-тест ' + i, 1);
+    var tViol = Date.now() - t1;
+    /* 3) замер памяти */
+    var mem = null;
+    try {
+      if (window.performance && performance.memory) {
+        mem = +(performance.memory.usedJSHeapSize / 1048576).toFixed(2);
+      }
+    } catch (e) {}
+    admin.stress = {
+      at: Date.now(), events: n, viol: viol,
+      msEvents: tEvents, msViol: tViol, heapMB: mem,
+      perEvent: +(tEvents / Math.max(1, n)).toFixed(3),
+      feed: FEED.length, violLog: Monitor.state.viol.length
+    };
+    var box = $('adminStress');
+    if (box) {
+      box.innerHTML =
+        '<b>' + n + '</b> событий ввода за <b>' + tEvents + ' мс</b> (' + admin.stress.perEvent + ' мс/событие) · ' +
+        '<b>' + viol + '</b> нарушений за <b>' + tViol + ' мс</b>' +
+        (mem !== null ? ' · heap <b>' + mem + ' МБ</b>' : '') +
+        '<br><span class="dim2">журнал событий: ' + admin.stress.feed + ' записей · журнал нарушений: ' +
+        admin.stress.violLog + ' (ограничен) — страница отзывчива</span>';
+    }
+    if (window.Health) Health.log('info', 'Локальный стресс-тест: ' + n + ' событий за ' + tEvents + ' мс');
+    adminToast('Стресс-тест завершён: ' + tEvents + ' мс на ' + n + ' событий', 'good');
+    return admin.stress;
+  }
+
+  if (els.btnAdminAuth) on(els.btnAdminAuth, 'click', adminAuth);
+  if (els.adminPass) on(els.adminPass, 'keydown', function (e) { if (e.key === 'Enter') adminAuth(); });
+  if (els.btnAdminLock) on(els.btnAdminLock, 'click', adminLock);
+  if (els.btnAdminCheck) on(els.btnAdminCheck, 'click', adminCheckUpdates);
+  if (els.btnAdminUpdate) on(els.btnAdminUpdate, 'click', adminApplyUpdate);
+  if (els.btnAdminStress) on(els.btnAdminStress, 'click', function () { adminStressTest(20000); });
+  if (els.btnAdminStressSmall) on(els.btnAdminStressSmall, 'click', function () { adminStressTest(5000); });
+  if (els.btnAdminPurge) on(els.btnAdminPurge, 'click', function () {
+    if (typeof window.confirm === 'function' && !/jsdom/i.test(navigator.userAgent || '')) {
+      try { if (window.confirm('Удалить статистику, историю и состояние сессии? Действие необратимо.') === false) return; } catch (e) {}
+    }
+    try { localStorage.removeItem('obzvon_v2_totals'); } catch (e) {}
+    try { localStorage.removeItem('obzvon_v2_history'); } catch (e2) {}
+    try { localStorage.removeItem(CONFIG.storageKey); } catch (e3) {}
+    if (window.Archive) Archive.clear();
+    adminToast('Хранилище очищено', 'good');
+    if (window.Health) Health.check();
+  });
+  adminRender();
+
   window.OBZ = {
     v: CONFIG.appVersion,
     state: function () {
@@ -1979,6 +2215,10 @@
       return acts.join('; ');
     },
     watchdog: function () { return { checks: watchdog.checks, repairs: watchdog.repairs, last: watchdog.lastRepair }; },
+    admin: function () { return { authed: admin.authed, latest: upd.found, notes: upd.notes, applying: upd.applying }; },
+    adminAuth: adminAuth,
+    adminStress: adminStressTest,
+    applyUpdate: applyUpdate,
     /* перезапуск системы: освобождаем ресурсы и поднимаемся заново (v4.1) */
     restart: function () {
       try { saveState(); } catch (e) {}

@@ -10,7 +10,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=4.1" />
+  <link rel="stylesheet" href="css/styles.css?v=4.2" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -36,7 +36,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 4.1</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 4.2</div>
         </div>
       </div>
 
@@ -50,7 +50,7 @@
         <a class="nav-link" href="#view-feed" data-view="feed"><i>📜</i><span>Журнал</span></a>
         <a class="nav-link" href="#view-news" data-view="news"><i>📣</i><span>Новости</span></a>
         <a class="nav-link" href="#view-help" data-view="help"><i>❓</i><span>Справка</span></a>
-        <a class="nav-link" href="#view-health" data-view="health"><i>🛠</i><span>Обслуживание</span></a>
+        <a class="nav-link" href="#view-health" data-view="health"><i>🛠</i><span>Админка</span><b class="nav-lock" id="adminLock" title="Требуется код куратора">🔒</b></a>
       </nav>
 
       <div class="side-foot">
@@ -341,24 +341,66 @@
           </section>
         </div>
 
-        <!-- ===== СТРАНИЦА: САМООБСЛУЖИВАНИЕ ===== -->
+        <!-- ===== СТРАНИЦА: АДМИНКА (САМООБСЛУЖИВАНИЕ) ===== -->
         <div class="view" id="view-health" hidden>
           <section class="panel" id="healthPanel">
-            <div class="panel-head"><span class="panel-title">САМООБСЛУЖИВАНИЕ</span><span class="panel-hint" id="healthScore">—</span></div>
+            <div class="panel-head"><span class="panel-title">АДМИНКА · САМООБСЛУЖИВАНИЕ</span><span class="panel-hint" id="healthScore">—</span></div>
             <div class="panel-body">
-              <div class="health-tools">
-                <button type="button" class="btn btn-ghost" id="btnHealthCheck" title="Проверить все подсистемы">⟳ Проверить</button>
-                <button type="button" class="btn btn-go" id="btnHealthRepair" title="Починить, что можно">🛠 Восстановить</button>
-                <button type="button" class="btn btn-ghost" id="btnHealthReport" title="Скачать отчёт о состоянии">⬇ Отчёт</button>
-                <button type="button" class="btn btn-ghost" id="btnHealthClear" title="Очистить журнал ошибок">⌫ Журнал</button>
-                <button type="button" class="btn btn-ghost" id="btnHealthRestart" title="Освободить ресурсы и начать с чистого листа">⟲ Перезапуск</button>
-                <span class="stats-tools-hint">система сама следит за собой и чинит то, что чинится само</span>
+              <!-- вход по коду куратора -->
+              <div class="admin-gate" id="adminGate">
+                <div class="admin-gate-card">
+                  <div class="gate-icon">🛠</div>
+                  <h2>АДМИНКА ЗАКРЫТА</h2>
+                  <p>Панель обслуживания системы: состояние подсистем, фоновое обновление
+                     без прерывания обзвона, авто-починка, перезапуск и локальный
+                     нагрузочный тест. Вход — по коду куратора.</p>
+                  <div class="auth-row">
+                    <input type="password" id="adminPass" class="input" placeholder="код доступа" autocomplete="off" />
+                    <button type="button" class="btn btn-ghost" id="btnAdminAuth">Войти</button>
+                  </div>
+                  <div class="auth-hint">код доступа на странице не показывается — только для куратора</div>
+                </div>
               </div>
-              <div class="health-grid" id="healthGrid"></div>
-              <div class="health-repair" id="healthRepair"></div>
-              <div class="health-log-wrap">
-                <h3 class="health-log-title">ЖУРНАЛ ОШИБОК</h3>
-                <ul class="health-log" id="healthLog"></ul>
+
+              <!-- содержимое админки -->
+              <div id="adminBody" hidden>
+                <div class="admin-block">
+                  <div class="admin-block-title">ОБНОВЛЕНИЯ</div>
+                  <div class="admin-row" id="adminUpdateInfo">установлена <b>v4.2</b></div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminCheck" title="Проверить наличие новой версии">⟳ Проверить</button>
+                    <button type="button" class="btn btn-go" id="btnAdminUpdate" title="Применить обновление в фоне, не прерывая обзвон">⬆ Обновить в фоне</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminLock" title="Закрыть админку">🔒 Закрыть</button>
+                  </div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">СОСТОЯНИЕ СИСТЕМЫ</div>
+                  <div class="health-grid" id="healthGrid"></div>
+                  <div class="health-repair" id="healthRepair"></div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnHealthCheck" title="Проверить все подсистемы">⟳ Проверить</button>
+                    <button type="button" class="btn btn-go" id="btnHealthRepair" title="Починить, что можно">🛠 Восстановить</button>
+                    <button type="button" class="btn btn-ghost" id="btnHealthRestart" title="Освободить ресурсы и начать заново">⟲ Перезапуск</button>
+                    <button type="button" class="btn btn-ghost" id="btnHealthReport" title="Скачать отчёт о состоянии">⬇ Отчёт</button>
+                    <button type="button" class="btn btn-ghost" id="btnHealthClear" title="Очистить журнал ошибок">⌫ Журнал</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminPurge" title="Очистить статистику, историю и состояние сессии">🧹 Очистить хранилище</button>
+                  </div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">НАГРУЗОЧНЫЙ ТЕСТ (ЛОКАЛЬНЫЙ)</div>
+                  <div class="admin-row" id="adminStress">тест ещё не проводился — нагрузка идёт только по этой странице, наружу не уходит</div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminStressSmall">5 000 событий</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminStress">20 000 событий</button>
+                  </div>
+                </div>
+
+                <div class="health-log-wrap">
+                  <h3 class="health-log-title">ЖУРНАЛ ОШИБОК</h3>
+                  <ul class="health-log" id="healthLog"></ul>
+                </div>
               </div>
             </div>
           </section>
@@ -383,6 +425,18 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v4.2</div>
+                  <div class="news-body">
+                    <h3>Фоновое обновление и админка самообслуживания</h3>
+                    <p>Новая версия ставится прямо в работающей странице: старый код
+                       освобождает ресурсы, модули перезапускаются с новыми адресами —
+                       обзвон не прерывается, кэш браузера обходится. Появилась
+                       <b>админка</b> с кодом куратора: состояние всех подсистем,
+                       управление обновлениями, авто-починка, перезапуск, очистка
+                       хранилища и локальный нагрузочный тест.</p>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v4.1</div>
                   <div class="news-body">
                     <h3>Самопочинка: страница «Обслуживание» и сторож системы</h3>
@@ -616,13 +670,13 @@
   <div class="wm-layer" id="wmLayer" aria-hidden="true"></div>
   <div class="noise" aria-hidden="true"></div>
 
-  <script src="js/fx.js?v=4.1"></script>
-  <script src="js/monitor.js?v=4.1"></script>
-  <script src="js/nav.js?v=4.1"></script>
-  <script src="js/live.js?v=4.1"></script>
-  <script src="js/archive.js?v=4.1"></script>
-  <script src="js/health.js?v=4.1"></script>
-  <script src="js/app.js?v=4.1"></script>
+  <script src="js/fx.js?v=4.2"></script>
+  <script src="js/monitor.js?v=4.2"></script>
+  <script src="js/nav.js?v=4.2"></script>
+  <script src="js/live.js?v=4.2"></script>
+  <script src="js/archive.js?v=4.2"></script>
+  <script src="js/health.js?v=4.2"></script>
+  <script src="js/app.js?v=4.2"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

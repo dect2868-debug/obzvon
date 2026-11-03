@@ -299,16 +299,71 @@ s.test('баннер обновления показывается и откла
   t.close();
 });
 
-s.test('кнопка «Обновить сейчас» перезагружает страницу с новой версией', async () => {
+s.test('кнопка «Обновить сейчас» применяет обновление в фоне, без перезагрузки', async () => {
   const t = boot({ pass: 'test-pass', version: '9.9' });
   t.el('btnUpdate').click();
   await sleep(120);
+  eq(t.el('updBanner').hidden, false, 'баннер обновления не показан');
   t.el('btnUpdateNow').click();
-  await sleep(60);
-  const url = t.win.__obzLastNav || '';
-  assert(url, 'переход не выполнен');
-  assert(/obzupd=9\.9/.test(url), 'неверный адрес перехода: ' + url);
+  await sleep(120);
+
+  /* новые модули подгружаются с новой версией и меткой времени (обход кэша) */
+  const srcs = t.$$('script[src]').map((s) => s.getAttribute('src'));
+  const fresh = srcs.filter((s) => /[?&]v=9\.9/.test(s) && /[?&]t=/.test(s));
+  assert(fresh.length >= 1, 'новые модули не подгружены (' + fresh.length + ')');
+  assert(fresh.some((s) => /js\/fx\.js/.test(s)), 'первым должен грузиться fx.js');
+
+  /* цепочка загрузки продолжается: имитируем успешную загрузку очередного модуля */
+  let guard = 0;
+  while (guard++ < 10) {
+    const pend = t.$$('script[src]').filter((s) => {
+      const src = s.getAttribute('src');
+      return /[?&]v=9\.9/.test(src) && !s.__loaded;
+    });
+    if (!pend.length) break;
+    pend[0].__loaded = true;
+    pend[0].dispatchEvent(new t.win.Event('load'));
+    await sleep(20);
+  }
+  const all = t.$$('script[src]').map((s) => s.getAttribute('src')).filter((s) => /[?&]v=9\.9/.test(s));
+  assert(all.length >= 6, 'цепочка модулей не дошла до конца (' + all.length + ')');
+  assert(all.some((s) => /js\/app\.js/.test(s)), 'app.js не перезагружен');
+
+  /* старый экземпляр освободил ресурсы */
+  const tick = t.win.Monitor.lastTickAt();
+  await sleep(1300);
+  eq(t.win.Monitor.lastTickAt(), tick, 'старый монитор продолжает тикать — остановка не сработала');
+
+  /* старые слушатели сняты: кнопка больше не запускает старую логику */
+  t.el('btnCalibrate').click();
+  await sleep(80);
+  eq(t.el('playfield').hidden, true, 'старый обработчик кнопки всё ещё активен');
   t.close();
+});
+
+s.test('обновление, применённое системой, не наказывается как перезагрузка', async () => {
+  /* состояние «работающей сессии» + метка чистого обновления */
+  const t = boot({ pass: 'test-pass' });
+  await sleep(60);
+  await auth(t.win, 'test-pass');
+  fastCalibrate(t.win);
+  await sleep(30);
+  t.el('btnStart').click();
+  await sleep(120);
+  const saved = t.win.localStorage.getItem('obzvon_v2_state');
+  t.close();
+  assert(saved, 'состояние сессии не сохранено');
+
+  const t2 = boot({
+    pass: 'test-pass',
+    storage: { obzvon_v2_state: saved },
+    session: { obzvon_v2_clean_update: String(Date.now()) }
+  });
+  await sleep(250);
+  const viol = t2.win.Monitor.state.viol.map((v) => v.type);
+  eq(viol.indexOf('reload'), -1, 'чистое обновление засчитано как перезагрузка');
+  assert(/фоновое обновление/i.test(t2.el('signalList').textContent), 'в журнале нет записи об обновлении');
+  t2.close();
 });
 
 s.test('экспорт истории в CSV содержит заголовок и строки', async () => {
@@ -466,6 +521,75 @@ s.test('модули освобождают ресурсы — система у
   t.win.Monitor.stop();
   await sleep(1300);
   eq(t.win.Monitor.lastTickAt(), after, 'после остановки пульс должен прекратиться');
+  t.close();
+});
+
+/* ============================================================
+   v4.2 · АДМИНКА И ФОНОВОЕ ОБНОВЛЕНИЕ
+   ============================================================ */
+
+s.test('админка закрыта до ввода кода куратора', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(150);
+  eq(t.el('adminBody').hidden, true, 'тело админки открыто без кода');
+  eq(t.el('adminGate').hidden, false, 'гейт админки скрыт');
+  t.close();
+});
+
+s.test('неверный код не открывает админку, верный — открывает', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(150);
+  t.el('adminPass').value = 'wrong';
+  t.el('btnAdminAuth').click();
+  await sleep(60);
+  eq(t.el('adminBody').hidden, true, 'админка открылась с неверным кодом');
+
+  t.el('adminPass').value = 'test-pass';
+  t.el('btnAdminAuth').click();
+  await sleep(120);
+  eq(t.el('adminBody').hidden, false, 'админка не открылась с верным кодом');
+  eq(t.el('adminGate').hidden, true, 'гейт админки не скрылся');
+  eq(t.win.OBZ.admin().authed, true, 'состояние админки не переключилось');
+  t.close();
+});
+
+s.test('админка показывает состояние системы и версию', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(150);
+  t.el('adminPass').value = 'test-pass';
+  t.el('btnAdminAuth').click();
+  await sleep(200);
+  assert(t.$$('#healthGrid .hcard').length >= 8, 'нет карточек состояния');
+  assert(/v\d/.test(t.el('adminUpdateInfo').textContent), 'не показан номер версии: ' + t.el('adminUpdateInfo').textContent);
+  t.close();
+});
+
+s.test('нагрузочный тест в админке мерит отзывчивость страницы', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(150);
+  t.el('adminPass').value = 'test-pass';
+  t.el('btnAdminAuth').click();
+  await sleep(120);
+  t.el('btnAdminStressSmall').click();
+  await sleep(300);
+  const res = t.win.OBZ.adminStress(2000);
+  assert(res && res.events === 2000, 'стресс-тест не отработал');
+  assert(res.msEvents >= 0, 'нет замера времени');
+  assert(/событий/.test(t.el('adminStress').textContent), 'результат теста не показан');
+  eq(t.errors.length, 0, 'ошибки во время стресс-теста: ' + t.errors.join(' | '));
+  t.close();
+});
+
+s.test('кнопка «Закрыть» выводит из админки', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(150);
+  t.el('adminPass').value = 'test-pass';
+  t.el('btnAdminAuth').click();
+  await sleep(120);
+  t.el('btnAdminLock').click();
+  await sleep(60);
+  eq(t.el('adminBody').hidden, true, 'админка не закрылась');
+  eq(t.win.OBZ.admin().authed, false, 'состояние админки не сброшено');
   t.close();
 });
 

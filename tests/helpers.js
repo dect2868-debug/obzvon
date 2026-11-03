@@ -119,6 +119,14 @@ function boot(opts = {}) {
           }
         } catch (e) {}
       }
+      /* --- стартовый sessionStorage --- */
+      if (opts.session) {
+        try {
+          for (const k of Object.keys(opts.session)) {
+            window.sessionStorage.setItem(k, opts.session[k]);
+          }
+        } catch (e) {}
+      }
     }
   });
 

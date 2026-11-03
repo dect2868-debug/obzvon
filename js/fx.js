@@ -266,14 +266,21 @@
   }
   function stop() {
     if (raf) { window.cancelAnimationFrame(raf); raf = 0; }
+    /* снимаем слушатели, чтобы после перезапуска их не было дважды (v4.2) */
+    try {
+      window.removeEventListener('resize', resize);
+      document.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('visibilitychange', onVisibility);
+    } catch (e) {}
   }
 
-  window.addEventListener('resize', resize, { passive: true });
-  document.addEventListener('pointerdown', function (e) {
+  /* слушатели снимаются при остановке — для чистого перезапуска (v4.2) */
+  function onPointerDown(e) {
     if (reduce || document.hidden) return;
     sparkBurst(e.clientX, e.clientY);
-  }, { passive: true });
-  window.addEventListener('mousemove', function (e) {
+  }
+  function onMouseMove(e) {
     mx = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
     my = (e.clientY / Math.max(1, window.innerHeight)) * 2 - 1;
     if (reduce || document.hidden) return;
@@ -283,10 +290,14 @@
       trail.push({ x: cxp, y: cyp });
       if (trail.length > 26) trail.shift();
     }
-  }, { passive: true });
-  document.addEventListener('visibilitychange', function () {
+  }
+  function onVisibility() {
     if (document.hidden) stop(); else start();
-  });
+  }
+  window.addEventListener('resize', resize, { passive: true });
+  document.addEventListener('pointerdown', onPointerDown, { passive: true });
+  window.addEventListener('mousemove', onMouseMove, { passive: true });
+  document.addEventListener('visibilitychange', onVisibility);
 
   /* ---------- 3D-наклон карточек по курсору ---------- */
   function initTilt() {

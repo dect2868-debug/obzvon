@@ -8,7 +8,8 @@
     "smoke": "node tests/smoke.js",
     "e2e": "node tests/e2e.js",
     "security": "node tests/security.js",
-    "load": "node tests/load.js"
+    "load": "node tests/load.js",
+    "stress": "node tests/stress.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.0"

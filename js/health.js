@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.1 · HEALTH — самодиагностика и самопочинка
+   ОБЗВОН v4.2 · HEALTH — самодиагностика и самопочинка
    Страница «Самообслуживание»: система сама проверяет свои
    подсистемы (модули, DOM, canvas, хранилище, сеть, сессия,
    график, монитор), ведёт журнал ошибок и умеет чинить то,
@@ -315,14 +315,22 @@
 
   /* ---------- события страницы ---------- */
 
+  /* реестр слушателей: нужен для чистого перезапуска системы (v4.2) */
+  var LISTENERS = [];
+  function on(target, type, fn) {
+    if (!target || !target.addEventListener) return;
+    target.addEventListener(type, fn);
+    LISTENERS.push([target, type, fn]);
+  }
+
   function bind() {
     var btnCheck = el('btnHealthCheck');
-    if (btnCheck) btnCheck.addEventListener('click', function () {
+    if (btnCheck) on(btnCheck, 'click', function () {
       var res = check();
       log('info', 'Ручная проверка: ' + res.score + '% — ' + res.ok + ' из ' + res.total);
     });
     var btnRepair = el('btnHealthRepair');
-    if (btnRepair) btnRepair.addEventListener('click', function () {
+    if (btnRepair) on(btnRepair, 'click', function () {
       var r = repair();
       log(r.failed.length ? 'warn' : 'info',
         r.failed.length
@@ -330,14 +338,14 @@
           : ('Починка выполнена: исправлено ' + r.actions.length + ' подсистем'));
     });
     var btnReport = el('btnHealthReport');
-    if (btnReport) btnReport.addEventListener('click', downloadReport);
+    if (btnReport) on(btnReport, 'click', downloadReport);
     var btnRestart = el('btnHealthRestart');
-    if (btnRestart) btnRestart.addEventListener('click', function () {
+    if (btnRestart) on(btnRestart, 'click', function () {
       log('info', 'Запрошен перезапуск системы');
       if (window.OBZ && OBZ.restart) OBZ.restart();
     });
     var btnClear = el('btnHealthClear');
-    if (btnClear) btnClear.addEventListener('click', function () {
+    if (btnClear) on(btnClear, 'click', function () {
       errors = [];
       renderLog();
       log('info', 'Журнал ошибок очищен');
@@ -367,6 +375,10 @@
 
   function stop() {
     if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    for (var i = 0; i < LISTENERS.length; i++) {
+      try { LISTENERS[i][0].removeEventListener(LISTENERS[i][1], LISTENERS[i][2]); } catch (e) {}
+    }
+    LISTENERS = [];
     return true;
   }
 

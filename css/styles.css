@@ -1061,3 +1061,39 @@ th.sorted{animation:thPulse .3s ease}
   .live-ticker{max-width:100%}
   .health-grid{grid-template-columns:1fr}
 }
+
+/* ============================================================
+   ОБЗВОН v4.2 · АДМИНКА: вход по коду, блоки, стресс-тест
+   ============================================================ */
+
+/* замок на пункте меню */
+.nav-lock{font-size:10px;margin-left:auto;opacity:.55;font-weight:400}
+.nav-link.locked{opacity:.72}
+.nav-link.locked:hover{opacity:1}
+.nav-link.active .nav-lock{opacity:.9}
+
+/* вход в админку */
+.admin-gate{display:flex;justify-content:center;padding:6px 0 10px}
+.admin-gate-card{margin:0 auto;max-width:640px;text-align:center;padding:30px 24px;border-radius:18px;
+  border:1px dashed rgba(52,231,255,.35);
+  background:radial-gradient(500px 240px at 50% 0%,rgba(52,231,255,.08),transparent 70%)}
+.admin-gate-card h2{font-family:var(--mono);letter-spacing:4px;font-size:19px;margin:12px 0 10px;color:var(--acc);
+  text-shadow:0 0 18px rgba(52,231,255,.35)}
+.admin-gate-card p{color:var(--dim);font-size:13px;line-height:1.6;max-width:520px;margin:0 auto 18px}
+.admin-gate-card .auth-row{justify-content:center}
+
+/* блоки админки */
+.admin-block{padding:16px 0;border-top:1px solid rgba(255,255,255,.05)}
+.admin-block:first-child{border-top:none;padding-top:0}
+.admin-block-title{font-family:var(--mono);font-size:10.5px;letter-spacing:2.5px;color:var(--acc);
+  margin-bottom:10px;text-shadow:0 0 10px rgba(52,231,255,.3)}
+.admin-row{font-family:var(--mono);font-size:11.5px;line-height:1.6;color:var(--dim);
+  padding:10px 13px;border-radius:10px;background:rgba(255,255,255,.025);
+  border-left:3px solid var(--acc);margin-bottom:10px}
+.admin-row b{color:var(--txt)}
+.admin-row .dim2{color:#4d6288;font-size:10.5px}
+
+@media(max-width:640px){
+  .admin-gate-card{padding:22px 16px}
+  .nav-lock{display:none}
+}

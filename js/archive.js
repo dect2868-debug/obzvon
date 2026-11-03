@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.1 · ARCHIVE — история обзвонов и сравнение
+   ОБЗВОН v4.2 · ARCHIVE — история обзвонов и сравнение
    Каждый завершённый обзвон сохраняется локально: вердикт,
    концентрация, читомеряк, реакция, число испытаний.
    Есть разбор по сессиям, сравнение с предыдущей и экспорт CSV.
@@ -359,12 +359,27 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
 
-  /* ---------- события ---------- */
+  /* ---------- события страницы ---------- */
+
+  /* реестр слушателей: нужен для чистого перезапуска системы (v4.2) */
+  var LISTENERS = [];
+  function on(target, type, fn) {
+    if (!target || !target.addEventListener) return;
+    target.addEventListener(type, fn);
+    LISTENERS.push([target, type, fn]);
+  }
+  function stop() {
+    for (var i = 0; i < LISTENERS.length; i++) {
+      try { LISTENERS[i][0].removeEventListener(LISTENERS[i][1], LISTENERS[i][2]); } catch (e) {}
+    }
+    LISTENERS = [];
+    return true;
+  }
 
   function bind() {
     var t = el('archTable');
     if (t) {
-      t.addEventListener('click', function (e) {
+      on(t, 'click', function (e) {
         var del = e.target.closest ? e.target.closest('[data-del]') : null;
         if (del) {
           e.stopPropagation();
@@ -388,9 +403,9 @@
       });
     }
     var btnCsv = el('btnArchCsv');
-    if (btnCsv) btnCsv.addEventListener('click', exportCSV);
+    if (btnCsv) on(btnCsv, 'click', exportCSV);
     var btnClear = el('btnArchClear');
-    if (btnClear) btnClear.addEventListener('click', function () {
+    if (btnClear) on(btnClear, 'click', function () {
       if (!items.length) return;
       if (typeof window.confirm === 'function' && !/jsdom/i.test(navigator.userAgent || '')) {
         try { if (window.confirm('Удалить всю историю обзвонов? Действие необратимо.') === false) return; } catch (e) {}
@@ -407,7 +422,7 @@
   }
 
   window.Archive = {
-    init: init, add: add, list: list, clear: clear, remove: remove,
+    init: init, add: add, list: list, clear: clear, remove: remove, stop: stop,
     render: render, exportCSV: exportCSV, csv: buildCSV, select: function (id) {
       selectedId = id; renderTable(); renderCompare();
     }
