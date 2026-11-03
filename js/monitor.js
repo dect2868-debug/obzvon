@@ -339,7 +339,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-3.6',
+      version: 'OBZVON-3.7',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,

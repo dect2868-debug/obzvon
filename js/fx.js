@@ -1,9 +1,9 @@
 /* ============================================================
-   ОБЗВОН v3.1 · EPIC FX — космический фон + неоновые глифы:
+   ОБЗВОН v3.7 · EPIC FX — космический фон + неоновые глифы:
    живые мерцающие звёзды с параллаксом, редкие падающие
    звёзды, колонны падающих цифровых глифов, 3D-наклон
-   карточек по курсору. Уважает prefers-reduced-motion.
-   Работает и на file://
+   карточек по курсору, искры при клике. Уважает
+   prefers-reduced-motion. Работает и на file://
    ============================================================ */
 (function () {
   'use strict';
@@ -14,7 +14,8 @@
 
   var W = 0, H = 0;
   var DPR = Math.min(window.devicePixelRatio || 1, 2);
-  var stars = [], shots = [], glyphs = [];
+  var stars = [], shots = [], glyphs = [], sparks = [];
+  var SPARK_COLORS = ['#34e7ff', '#ff4dd8', '#9dff5b', '#c084fc'];
   var t = 0, raf = 0;
   var mx = 0, my = 0, px = 0, py = 0;          /* параллакс от курсора */
   var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -155,7 +156,43 @@
     }
 
     ctx.globalAlpha = 1;
+
+    /* ---------- искры при клике ---------- */
+    for (var p = sparks.length - 1; p >= 0; p--) {
+      var sk = sparks[p];
+      sk.x += sk.vx; sk.y += sk.vy;
+      sk.vx *= 0.97; sk.vy = sk.vy * 0.97 + 0.13;   /* лёгкая гравитация */
+      sk.life -= 0.022;
+      if (sk.life <= 0) { sparks.splice(p, 1); continue; }
+      ctx.globalAlpha = Math.max(0, sk.life);
+      ctx.fillStyle = sk.c;
+      ctx.beginPath();
+      ctx.arc(sk.x, sk.y, sk.r * sk.life + 0.3, 0, 6.2832);
+      ctx.fill();
+      /* короткий светящийся след */
+      ctx.globalAlpha = Math.max(0, sk.life) * 0.5;
+      ctx.fillRect(sk.x - sk.vx * 2.4, sk.y - sk.vy * 2.4 - 0.4, sk.vx * 4.8, 0.8);
+    }
+    ctx.globalAlpha = 1;
     raf = window.requestAnimationFrame(frame);
+  }
+
+  /* вспышка искр в точке клика */
+  function sparkBurst(x, y) {
+    if (sparks.length > 140) return;
+    var n = 10 + Math.floor(Math.random() * 7);
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var sp = 1.6 + Math.random() * 4.4;
+      sparks.push({
+        x: x, y: y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 1.4,
+        r: Math.random() * 1.7 + 0.7,
+        c: SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)],
+        life: 0.75 + Math.random() * 0.3
+      });
+    }
   }
 
   function start() {
@@ -167,6 +204,10 @@
   }
 
   window.addEventListener('resize', resize, { passive: true });
+  document.addEventListener('pointerdown', function (e) {
+    if (reduce || document.hidden) return;
+    sparkBurst(e.clientX, e.clientY);
+  }, { passive: true });
   window.addEventListener('mousemove', function (e) {
     mx = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
     my = (e.clientY / Math.max(1, window.innerHeight)) * 2 - 1;

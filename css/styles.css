@@ -713,7 +713,7 @@ h1 span{background-image:linear-gradient(90deg,var(--acc),var(--acc3),var(--vio)
 }
 
 /* ============================================================
-   ОБЗВОН v3.6 · СТРАНИЦЫ-РАЗДЕЛЫ И ПАНЕЛЬ ПАМЯТИ
+   ОБЗВОН v3.7 · СТРАНИЦЫ-РАЗДЕЛЫ И ПАНЕЛЬ ПАМЯТИ
    ============================================================ */
 
 /* ---------- вкладка-страница ---------- */
@@ -794,3 +794,52 @@ h1 span{background-image:linear-gradient(90deg,var(--acc),var(--acc3),var(--vio)
   0%{transform:translate3d(0,0,0) rotate(40deg) scale(1.05)}
   50%{transform:translate3d(-7vw,6vh,0) rotate(200deg) scale(.92)}
   100%{transform:translate3d(5vw,-6vh,0) rotate(360deg) scale(1.12)}}
+
+/* ============================================================
+   ОБЗВОН v3.7 · РАСШИРЕННАЯ ГРАФИКА + СТРАНИЦА НОВОСТЕЙ
+   ============================================================ */
+
+/* ---------- кнопки: глитч RGB-сдвига + неоновое свечение ---------- */
+.btn:not(:disabled):hover{
+  animation:btnGlitch .3s steps(3) 1;
+  box-shadow:0 0 0 1px rgba(52,231,255,.35),0 0 22px rgba(255,77,216,.3),0 8px 24px rgba(0,0,0,.35);
+  text-shadow:-1.5px 0 rgba(255,77,109,.9),1.5px 0 rgba(52,231,255,.9)}
+@keyframes btnGlitch{
+  0%{transform:translate(-1.5px,-2px) skewX(-3deg)}
+  40%{transform:translate(1.5px,-2px) skewX(3deg)}
+  70%{transform:translate(-.5px,-2px) skewX(-1deg)}
+  100%{transform:translateY(-2px)}}
+
+/* ---------- активный пункт меню: живой блик + пульс метки ---------- */
+.nav-link.active::after{content:'';position:absolute;inset:0;border-radius:11px;pointer-events:none;
+  background:linear-gradient(105deg,transparent 32%,rgba(255,255,255,.45) 50%,transparent 68%);
+  background-size:260% 100%;background-repeat:no-repeat;
+  animation:navSheen 3.4s ease-in-out infinite}
+@keyframes navSheen{0%,55%{background-position:130% 0}100%{background-position:-130% 0}}
+.nav-link.active::before{animation:navBarPulse 2.1s ease-in-out infinite}
+@keyframes navBarPulse{
+  0%,100%{opacity:.55;box-shadow:0 0 6px var(--acc3)}
+  50%{opacity:1;box-shadow:0 0 16px var(--acc3),0 0 30px rgba(255,77,216,.5)}}
+
+/* ---------- страница «Новости»: таймлайн с светящимися узлами ---------- */
+.news-list{display:flex;flex-direction:column;gap:10px;position:relative;padding-left:4px}
+.news-item{position:relative;display:flex;gap:16px;padding:14px 16px 14px 34px;
+  border-radius:12px;border:1px solid transparent;transition:.2s}
+.news-item::before{content:'';position:absolute;left:8px;top:22px;width:9px;height:9px;border-radius:50%;
+  background:var(--acc);box-shadow:0 0 10px var(--acc),0 0 22px rgba(52,231,255,.5);z-index:1}
+.news-item::after{content:'';position:absolute;left:12px;top:34px;bottom:-18px;width:1px;
+  background:linear-gradient(180deg,rgba(52,231,255,.5),rgba(52,231,255,.05))}
+.news-item:last-child::after{display:none}
+.news-item:hover{background:rgba(52,231,255,.05);border-color:rgba(52,231,255,.25);
+  transform:translateX(5px);box-shadow:0 0 18px rgba(52,231,255,.12)}
+.news-ver{flex-shrink:0;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;
+  padding:5px 10px;border-radius:8px;color:#04121c;height:fit-content;
+  background:linear-gradient(135deg,var(--acc),var(--acc3));
+  box-shadow:0 0 14px rgba(52,231,255,.35)}
+.news-body h3{margin:0 0 5px;font-size:13.5px;letter-spacing:.6px;color:var(--txt)}
+.news-body p{margin:0;font-size:12.5px;line-height:1.6;color:var(--dim)}
+.news-new{border-color:rgba(255,77,216,.35);background:rgba(255,77,216,.05)}
+.news-new .news-ver{background:linear-gradient(135deg,#ffd166,#ff9f43);
+  box-shadow:0 0 14px rgba(255,209,102,.45);animation:newsVerPulse 2.4s ease-in-out infinite}
+.news-new::before{background:var(--acc3);box-shadow:0 0 10px var(--acc3),0 0 24px rgba(255,77,216,.6)}
+@keyframes newsVerPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3)}}
