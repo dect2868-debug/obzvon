@@ -439,6 +439,17 @@ s.test('сторож системы живой и умеет чинить зав
   t.close();
 });
 
+s.test('диагностика не даёт ложных срабатываний на свежей странице', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(1600);                       /* монитор должен «подышать» */
+  const res = t.win.Health.check();
+  const failed = res.checks.filter((c) => !c.ok);
+  eq(failed.length, 0, 'ложные срабатывания: ' +
+    failed.map((c) => c.id + ' (' + c.detail + ')').join(', '));
+  eq(res.score, 100, 'оценка системы должна быть 100%');
+  t.close();
+});
+
 module.exports = s;
 
 if (require.main === module) {

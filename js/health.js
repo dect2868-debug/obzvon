@@ -86,8 +86,13 @@
         var ctx = null;
         try { ctx = cv.getContext('2d'); } catch (e) {}
         if (!ctx) return { ok: false, detail: 'контекст 2D недоступен', fix: 'live' };
-        if (!cv.clientWidth) return { ok: false, detail: 'график не виден (ширина 0)', fix: 'live' };
-        return { ok: true, detail: cv.width + '×' + cv.height + ' px' };
+        if (!cv.width || !cv.height) {
+          return { ok: false, detail: 'график не инициализирован', fix: 'live' };
+        }
+        return {
+          ok: true,
+          detail: cv.width + '×' + cv.height + ' px' + (cv.clientWidth ? '' : ' · панель свёрнута')
+        };
       }
     },
     {
@@ -153,7 +158,7 @@
       run: function () {
         if (!window.Live) return { ok: false, detail: 'модуль графика не загружен', fix: 'reload' };
         var st = Live.stats();
-        if (Live.running && st.n === 0) {
+        if (Live.running() && st.n === 0) {
           return { ok: false, detail: 'график запущен, но замеров нет', fix: 'live' };
         }
         return { ok: true, detail: 'замеров: ' + st.n + ' · средняя ' + st.avg + '%' };

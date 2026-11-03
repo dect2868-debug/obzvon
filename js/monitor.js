@@ -392,6 +392,7 @@ window.Monitor = (function () {
   /* ---------------- watchdogs ---------------- */
   function tick() {
     S.lastActivity = S.lastActivity || now();
+    S.lastTickAt = now();          /* пульс: таймер монитора жив (v4.1) */
     if (!S.running) return;
 
     S.totalMs += cfg.tickInterval;
@@ -446,7 +447,6 @@ window.Monitor = (function () {
       emit('idle', 'Бездействие более ' + Math.round(cfg.idleLimit / 1000) + ' с (анти-AFK)', 2, 1);
     }
 
-    S.lastTickAt = now();
     if (cb.tick) cb.tick();
   }
 
@@ -490,6 +490,7 @@ window.Monitor = (function () {
     }
 
     armTimers();
+    S.lastTickAt = now();
   }
 
   /* таймеры монитора вынесены, чтобы их можно было перезапустить (v4.1) */
