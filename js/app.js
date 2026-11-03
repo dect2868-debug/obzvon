@@ -24,7 +24,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '3.4',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '3.5',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -941,7 +941,8 @@
       return { n: all.length, allOk: all.length > 0 && okN === all.length };
     }
     var kSeq = kindStats('seq'), kStroop = kindStats('stroop'),
-        kMath = kindStats('math'), kKey = kindStats('key');
+        kMath = kindStats('math'), kKey = kindStats('key'),
+        kTarget = kindStats('target'), kHold = kindStats('hold');
 
     var list = [];
     /* --- старые фишки --- */
@@ -961,6 +962,9 @@
     if (kStroop.n >= 3 && kStroop.allOk) list.push(['🎨', 'СТРУП-МАСТЕР', kStroop.n + '/' + kStroop.n + ' струп верно', '']);
     if (kMath.n >= 3 && kMath.allOk) list.push(['🔢', 'ЧИСЛОВОЙ ГУРУ', kMath.n + '/' + kMath.n + ' примеров верно', '']);
     if (kKey.n >= 4 && kKey.allOk) list.push(['⌨️', 'МАСТЕР КЛАВИШ', kKey.n + '/' + kKey.n + ' клавиш верно', 'cool']);
+    var allKinds = [kSeq, kStroop, kMath, kKey, kTarget, kHold];
+    var fullSet = allKinds.every(function (k) { return k.n >= 1 && k.allOk; });
+    if (fullSet) list.push(['🧩', 'ПОЛНЫЙ НАБОР', 'все 6 видов верно', 'gold']);
     if (ar !== null && ar < 450 && seance >= 5) list.push(['🧊', 'ЛЁД', 'ср. реакция ' + ar + ' мс', 'cool']);
     if (conc >= 99 && seance >= 5) list.push(['💎', 'ИДЕАЛЬНЫЙ', conc + '% концентрация', 'gold']);
     else if (conc >= 90 && seance >= 5) list.push(['🥇', 'ЧЕМПИОН', conc + '% концентрация', 'cool']);
@@ -977,6 +981,10 @@
     }
     if (S.copyAttempts > 0) {
       list.push(['📋', 'БУФЕР ПОД ЗАЩИТОЙ', S.copyAttempts + ' попыток отбито', 'guard']);
+    }
+    var shotViol = S.viol.filter(function (v) { return v.type === 'shot'; }).length;
+    if (shotViol > 0) {
+      list.push(['📸', 'СНИМКИ ОТБИТЫ', shotViol + ' снимков очищено', 'guard']);
     }
     if (seance >= 5 && !S.devtools) {
       list.push(['🕵', 'БЕЗ СЛЕДОВ', 'посторонних окон не было', 'guard']);
