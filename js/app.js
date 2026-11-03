@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.2 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v4.3 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '4.2',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '4.3',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -2045,6 +2045,28 @@
     }
   }, 5000);
 
+  /* ---------- история применённых версий (v4.3) ----------
+     Сайт записывает, какие версии он применял и когда. После
+     фонового обновления в этом списке видно переход — это
+     подтверждение, что обновление прошло на живом сайте. */
+  var UPD_KEY = 'obzvon_v2_updates';
+  function appliedUpdates() {
+    try {
+      var d = JSON.parse(localStorage.getItem(UPD_KEY));
+      return Array.isArray(d) ? d : [];
+    } catch (e) { return []; }
+  }
+  function noteAppliedVersion(v) {
+    try {
+      var list = appliedUpdates();
+      var last = list[list.length - 1];
+      if (last && last.v === v) return;
+      list.push({ v: v, at: Date.now() });
+      while (list.length > 20) list.shift();
+      localStorage.setItem(UPD_KEY, JSON.stringify(list));
+    } catch (e) {}
+  }
+
   /* ============================================================
      АДМИНКА (v4.2) — самообслуживание и управление обновлениями
      Открывается по коду куратора. Здесь: состояние системы,
@@ -2060,6 +2082,7 @@
     /* блокировка пункта меню до входа */
     var link = document.querySelector('.nav-link[data-view="health"]');
     if (link) link.classList.toggle('locked', !admin.authed);
+    if (admin.authed) adminUpdateInfo();
   }
 
   function adminToast(msg, cls) { toast(msg, cls || ''); }
@@ -2097,15 +2120,23 @@
   }
 
   /* ---------- управление обновлениями ---------- */
+  function adminUpdateInfo() {
+    var t = $('adminUpdateInfo');
+    if (!t) return;
+    var latest = upd.found || CONFIG.appVersion;
+    var hist = appliedUpdates().slice(-6).reverse().map(function (h) {
+      var d = new Date(h.at);
+      function p(n) { return ('0' + n).slice(-2); }
+      return 'v' + h.v + ' · ' + p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    });
+    t.innerHTML = 'установлена <b>v' + CONFIG.appVersion + '</b> · доступна <b>v' + latest + '</b>' +
+      (upd.notes ? '<br><span class="dim2">' + esc(upd.notes) + '</span>' : '') +
+      (hist.length ? '<br><span class="dim2">применено: ' + hist.join(' · ') + '</span>' : '');
+  }
+
   function adminCheckUpdates() {
     checkUpdates(true);
-    setTimeout(function () {
-      var t = $('adminUpdateInfo');
-      if (!t) return;
-      var latest = upd.found || CONFIG.appVersion;
-      t.innerHTML = 'установлена <b>v' + CONFIG.appVersion + '</b> · доступна <b>v' + latest + '</b>' +
-        (upd.notes ? '<br><span class="dim2">' + esc(upd.notes) + '</span>' : '');
-    }, 400);
+    setTimeout(adminUpdateInfo, 400);
   }
 
   function adminApplyUpdate() {
@@ -2235,4 +2266,5 @@
   updateTotalConcUI();
   restoreState();
   updateWatermark();
+  noteAppliedVersion(CONFIG.appVersion);
 })();
