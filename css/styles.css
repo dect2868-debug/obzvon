@@ -713,7 +713,7 @@ h1 span{background-image:linear-gradient(90deg,var(--acc),var(--acc3),var(--vio)
 }
 
 /* ============================================================
-   ОБЗВОН v3.3 · СТРАНИЦЫ-РАЗДЕЛЫ И ПАНЕЛЬ ПАМЯТИ
+   ОБЗВОН v3.4 · СТРАНИЦЫ-РАЗДЕЛЫ И ПАНЕЛЬ ПАМЯТИ
    ============================================================ */
 
 /* ---------- вкладка-страница ---------- */
@@ -737,3 +737,27 @@ h1 span{background-image:linear-gradient(90deg,var(--acc),var(--acc3),var(--vio)
   border-radius:10px;background:rgba(5,9,17,.6)}
 .mem-disclaimer{font-size:11.5px;color:var(--dim);line-height:1.55;padding:10px 13px;
   border-left:3px solid var(--acc);background:rgba(52,231,255,.05);border-radius:0 10px 10px 0}
+
+/* ============================================================
+   ОБЗВОН v3.4 · ФИШКИ АНТИ-СПИСЫВАНИЯ
+   ============================================================ */
+/* фирменная графика: вращающаяся коническая рамка + внутреннее сияние */
+.chip.guard{color:#7dffb2;border-color:rgba(157,255,91,.32);
+  background:linear-gradient(180deg,rgba(157,255,91,.10),rgba(52,231,255,.05));
+  box-shadow:0 0 16px rgba(157,255,91,.18),inset 0 0 12px rgba(52,231,255,.07)}
+.chip.guard::before{content:'';position:absolute;inset:0;border-radius:999px;padding:1.4px;pointer-events:none;
+  background:conic-gradient(from var(--ang),
+    rgba(157,255,91,.10) 0 30%,rgba(52,231,255,.85) 46%,rgba(255,77,216,.7) 56%,rgba(157,255,91,.10) 72% 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  animation:angSpin 3s linear infinite}
+.chip.guard i{color:rgba(157,255,91,.7)}
+.chip.guard:hover{box-shadow:0 0 22px rgba(157,255,91,.32),inset 0 0 14px rgba(52,231,255,.1);
+  transform:translateY(-1px)}
+/* вспышка срабатывания защиты при новой строке журнала */
+.feed-list li.sev-1,.feed-list li.sev-2{animation:feedHit .55s ease-out}
+@keyframes feedHit{
+  0%{box-shadow:inset 0 0 20px rgba(255,77,109,.4);transform:translateX(-5px)}
+  100%{box-shadow:none;transform:none}}

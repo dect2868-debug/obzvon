@@ -24,7 +24,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '3.3',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '3.4',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -32,7 +32,7 @@
     threshold: 60,            // порог «читомеряка» по умолчанию (%)
     calibCount: 100,          // испытаний калибровки по умолчанию (до 100 — длинная проверка)
     calibSpeed: 0.35,         // сложность калибровки: 0.35 = время на ответ короче на 65%
-    chTimeout: 6000,          // базовый таймаут испытания, мс
+    chTimeout: 9000,          // базовый таймаут испытания, мс
     chDelayMin: 10000,        // (не используется — темп задаёт nextDelay)
     chDelayMax: 25000,
     holdMs: 2000,             // (база) удержание клавиши
@@ -41,7 +41,7 @@
   };
 
   /* таймауты по типам испытаний (мс) */
-  var CH_TIMEOUTS = { key: 4500, target: 5000, hold: 7000, math: 6000, seq: 9000, stroop: 6000 };
+  var CH_TIMEOUTS = { key: 6750, target: 7500, hold: 10500, math: 9000, seq: 13500, stroop: 9000 };
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -381,12 +381,12 @@
     padReset();
 
     var to = CH_TIMEOUTS[kind] || CONFIG.chTimeout;
-    if (kind === 'hold') { CH.holdMs = rnd(1500, 3000); to = CH.holdMs + 4500; }
+    if (kind === 'hold') { CH.holdMs = rnd(1500, 3000); to = CH.holdMs + 6750; }
     /* калибровка: время на ответ короче на 65% (calibSpeed), плюс прогрессивное
        сжатие — каждые 20 зачётных испытаний ещё на 5% (до −25%),
        «финальный рубеж» на последних 10 испытаниях — ещё на 15% */
     if (calib) {
-      to = kind === 'hold' ? CH.holdMs + Math.round(4500 * CONFIG.calibSpeed)
+      to = kind === 'hold' ? CH.holdMs + Math.round(6750 * CONFIG.calibSpeed)
                            : Math.round(to * CONFIG.calibSpeed);
       var step = Math.min(25, Math.floor(ST.calibDone / 20) * 5);
       to = Math.round(to * (1 - step / 100));
@@ -967,6 +967,26 @@
     if (ST.calibFails === 0 && seance >= 1) list.push(['🛠', 'ЧИСТАЯ КАЛИБРОВКА', 'калибровка без ошибок', 'cool']);
     if (ST.hadReload && seance >= 3) list.push(['🔁', 'ВОЗВРАЩЕНИЕ', 'дошёл после перезагрузки', '']);
     if ((tot.sessions || 0) >= 10) list.push(['🏅', 'ВЕТЕРАН', (tot.sessions || 0) + ' обзвон(ов)', 'gold']);
+
+    /* --- анти-списывание: фишки-достижения --- */
+    var copyViol = S.viol.filter(function (v) {
+      return v.type === 'copy' || v.type === 'shot';
+    }).length;
+    if (seance >= 5 && S.copyAttempts === 0 && copyViol === 0) {
+      list.push(['🙅', 'РУКИ ПРОЧЬ', '0 попыток списать', 'guard']);
+    }
+    if (S.copyAttempts > 0) {
+      list.push(['📋', 'БУФЕР ПОД ЗАЩИТОЙ', S.copyAttempts + ' попыток отбито', 'guard']);
+    }
+    if (seance >= 5 && !S.devtools) {
+      list.push(['🕵', 'БЕЗ СЛЕДОВ', 'посторонних окон не было', 'guard']);
+    }
+    if (S.blockedKeys >= 3) {
+      list.push(['⌨️', 'КЛАВИШИ ОТБИТЫ', S.blockedKeys + ' сочетаний заблокировано', 'cool']);
+    }
+    if (seance >= 5 && !S.reloadTries) {
+      list.push(['🔒', 'СТАЛЬНОЙ КОРПУС', 'перезагрузок не было', 'guard']);
+    }
 
     if (!list.length) list.push(['🥊', 'ЕСТЬ К ЧЕМУ СТРЕМИТЬСЯ', 'попробуйте ещё раз', 'muted']);
     return list;
