@@ -1,10 +1,10 @@
 /* ============================================================
-   ОБЗВОН v4.0 · EPIC FX — космический фон + неоновые глифы:
-   живые мерцающие звёзды с параллаксом, редкие падающие
-   звёзды, колонны падающих цифровых глифов, 3D-наклон
-   карточек по курсору, искры при клике, неоновый след за
-   курсором, импульсные волны. Уважает prefers-reduced-motion.
-   Работает и на file://
+   ОБЗВОН v4.6 · FX — спокойный космический фон.
+   По умолчанию только редкие мерцающие звёзды с лёгким
+   параллаксом. Дождь глифов, падающие звёзды, искры при клике,
+   след за курсором и импульсные волны отключены: они
+   перекрывали интерфейс и выглядели как сломанная графика.
+   Уважает prefers-reduced-motion. Работает и на file://
    ============================================================ */
 (function () {
   'use strict';
@@ -23,6 +23,10 @@
   var cxp = -1, cyp = -1;                       /* позиция курсора в px */
   var flashColor = null, flashLife = 0;
   var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  /* v4.6: спокойный режим — только звёзды. Лишние эффекты выключены:
+     дождь глифов, падающие звёзды, искры и след курсора убраны —
+     они перекрывали интерфейс и выглядели как «сломанная» графика. */
+  var CALM = true;
   var GLYPH_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF<>/\\|+=';
   var GLYPH_COLORS = ['rgba(255,77,216,', 'rgba(52,231,255,', 'rgba(139,92,246,'];
 
@@ -36,7 +40,9 @@
   }
 
   function build() {
-    var n = Math.round(Math.min(170, Math.max(70, (W * H) / 13000)));
+    var n = CALM
+      ? Math.round(Math.min(90, Math.max(34, (W * H) / 26000)))
+      : Math.round(Math.min(170, Math.max(70, (W * H) / 13000)));
     stars = [];
     for (var i = 0; i < n; i++) {
       var r = Math.random();
@@ -50,8 +56,9 @@
         hue: r < 0.10 ? (r < 0.05 ? '#9dff5b' : '#c084fc') : '#cfe9ff'
       });
     }
-    /* колонны падающих глифов — редкие, слабые, только для декора */
+    /* колонны падающих глифов — только в обычном режиме (v4.6: спокойно) */
     glyphs = [];
+    if (CALM) return;
     var cols = Math.round(Math.min(14, Math.max(4, W / 130)));
     for (var g = 0; g < cols; g++) {
       glyphs.push({
@@ -112,6 +119,7 @@
     }
 
     /* падающие глифы (киберпанк-дождь, слабый) */
+    if (!CALM) {
     ctx.font = '12px Consolas, monospace';
     ctx.textAlign = 'center';
     for (var k = 0; k < glyphs.length; k++) {
@@ -132,8 +140,10 @@
       ctx.fillText(glyphChar(), gl.x + px * 14, gl.y + py * 8);
     }
 
+    } /* конец блока глифов (v4.6) */
+
     /* падающие звёзды */
-    if (shots.length < 3 && Math.random() < 0.0045) {
+    if (!CALM && shots.length < 3 && Math.random() < 0.0045) {
       shots.push({
         x: Math.random() * W * 0.75 + W * 0.2,
         y: Math.random() * H * 0.45,
@@ -162,6 +172,7 @@
     ctx.globalAlpha = 1;
 
     /* ---------- искры при клике ---------- */
+    if (CALM) { sparks.length = 0; }
     for (var p = sparks.length - 1; p >= 0; p--) {
       var sk = sparks[p];
       sk.x += sk.vx; sk.y += sk.vy;
@@ -179,8 +190,8 @@
     }
     ctx.globalAlpha = 1;
 
-    /* ---------- неоновый след за курсором (v4.0) ---------- */
-    if (trail.length > 1) {
+    /* ---------- неоновый след за курсором (v4.0, отключён в v4.6) ---------- */
+    if (!CALM && trail.length > 1) {
       ctx.lineCap = 'round';
       for (var tr = 1; tr < trail.length; tr++) {
         var a = trail[tr - 1], b = trail[tr];
@@ -198,6 +209,7 @@
     }
 
     /* ---------- импульсные волны (v4.0) ---------- */
+    if (CALM) { rings.length = 0; }
     for (var ri = rings.length - 1; ri >= 0; ri--) {
       var rg = rings[ri];
       rg.r += rg.vr;
@@ -247,13 +259,13 @@
 
   /* ---------- публичный API эффектов (v4.0) ---------- */
   function pulse(x, y, color) {
-    if (reduce) return;
+    if (reduce || CALM) return;
     if (rings.length > 24) return;
     rings.push({ x: x, y: y, r: 6, vr: 3.4, life: 1, c: color || '#ff4d6d' });
   }
 
   function flash(color) {
-    if (reduce) return;
+    if (reduce || CALM) return;
     flashColor = color || '#ff4d6d';
     flashLife = 1;
   }
@@ -277,13 +289,13 @@
 
   /* слушатели снимаются при остановке — для чистого перезапуска (v4.2) */
   function onPointerDown(e) {
-    if (reduce || document.hidden) return;
+    if (reduce || document.hidden || CALM) return;
     sparkBurst(e.clientX, e.clientY);
   }
   function onMouseMove(e) {
     mx = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
     my = (e.clientY / Math.max(1, window.innerHeight)) * 2 - 1;
-    if (reduce || document.hidden) return;
+    if (reduce || document.hidden || CALM) return;
     /* след: пишем точку, если курсор сместился заметно */
     if (cxp < 0 || Math.abs(e.clientX - cxp) + Math.abs(e.clientY - cyp) > 3) {
       cxp = e.clientX; cyp = e.clientY;

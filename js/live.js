@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.5 · LIVE — живая динамика сессии
+   ОБЗВОН v4.6 · LIVE — живая динамика сессии
    График концентрации и «читомеряка» в реальном времени,
    отметки испытаний и нарушений, живая лента событий.
    v4.1: самопочинка (repair), адаптация к размеру окна,
@@ -227,7 +227,7 @@
       ctx.strokeStyle = 'rgba(255,255,255,.055)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + gw, y); ctx.stroke();
-      ctx.fillStyle = 'rgba(125,140,163,.75)';
+      ctx.fillStyle = 'rgba(140,155,175,.7)';
       ctx.textAlign = 'right';
       ctx.fillText(v + '', padL - 5, y);
     });
@@ -235,7 +235,7 @@
     if (samples.length < 2) {
       /* ожидание: пульсирующая линия + подсказка */
       var pulse = 0.5 + 0.5 * Math.sin(Date.now() / 400);
-      ctx.strokeStyle = 'rgba(52,231,255,' + (0.25 + pulse * 0.3).toFixed(3) + ')';
+      ctx.strokeStyle = 'rgba(140,175,205,' + (0.18 + pulse * 0.18).toFixed(3) + ')';
       ctx.lineWidth = 1.4;
       ctx.setLineDash([6, 6]);
       ctx.beginPath();
@@ -243,7 +243,7 @@
       ctx.lineTo(padL + gw, padT + gh / 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(125,140,163,.75)';
+      ctx.fillStyle = 'rgba(140,155,175,.7)';
       ctx.textAlign = 'center';
       ctx.font = '11px Consolas,monospace';
       ctx.fillText(running ? 'идёт измерение…' : 'ожидание данных сессии…', padL + gw / 2, padT + gh / 2 - 14);
@@ -256,7 +256,7 @@
 
     /* заливка под линией концентрации */
     var grad = ctx.createLinearGradient(0, padT, 0, padT + gh);
-    grad.addColorStop(0, 'rgba(91,255,157,.28)');
+    grad.addColorStop(0, 'rgba(99,223,148,.16)');
     grad.addColorStop(1, 'rgba(91,255,157,0)');
     ctx.beginPath();
     ctx.moveTo(px(samples[0].t), py(0));
@@ -272,10 +272,10 @@
       var x = px(s.t), y = py(s.c);
       i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
     });
-    ctx.strokeStyle = '#5bff9d';
-    ctx.lineWidth = 1.8;
-    ctx.shadowColor = 'rgba(91,255,157,.8)';
-    ctx.shadowBlur = 7;
+    ctx.strokeStyle = '#63df94';
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = 'rgba(99,223,148,.35)';
+    ctx.shadowBlur = 3;
     ctx.stroke();
     ctx.shadowBlur = 0;
 
@@ -285,19 +285,19 @@
       var x = px(s.t), y = py(s.x);
       i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
     });
-    ctx.strokeStyle = '#ff4d6d';
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = 'rgba(255,77,109,.75)';
-    ctx.shadowBlur = 6;
+    ctx.strokeStyle = '#f0616f';
+    ctx.lineWidth = 1.4;
+    ctx.shadowColor = 'rgba(240,97,111,.3)';
+    ctx.shadowBlur = 3;
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     /* отметки: испытания (ok/fail) и нарушения (viol) */
     marks.forEach(function (m) {
       var x = px(m.t);
-      var col = m.kind === 'ok' ? '#9dff5b' : (m.kind === 'fail' ? '#ffb84d' : '#ff4d6d');
+      var col = m.kind === 'ok' ? '#63df94' : (m.kind === 'fail' ? '#e8b45a' : '#f0616f');
       if (m.kind === 'viol') {
-        ctx.strokeStyle = 'rgba(255,77,109,.55)';
+        ctx.strokeStyle = 'rgba(240,97,111,.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + gh); ctx.stroke();
@@ -321,13 +321,13 @@
     var lastS = samples[samples.length - 1];
     ctx.font = '10px Consolas,monospace';
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#5bff9d';
+    ctx.fillStyle = '#63df94';
     ctx.fillText(lastS.c + '%', w - padR + 38, py(lastS.c) - 6);
-    ctx.fillStyle = '#ff4d6d';
+    ctx.fillStyle = '#f0616f';
     ctx.fillText(lastS.x + '%', w - padR + 38, py(lastS.x) + 8);
 
     /* ось времени */
-    ctx.fillStyle = 'rgba(125,140,163,.75)';
+    ctx.fillStyle = 'rgba(140,155,175,.7)';
     ctx.textAlign = 'left';
     ctx.fillText('0:00', padL, h - 7);
     ctx.textAlign = 'right';
