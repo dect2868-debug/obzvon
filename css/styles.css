@@ -1188,7 +1188,10 @@ h1 span{background:linear-gradient(90deg,var(--txt),#9fb6d6)!important;
 .m-total b{color:var(--txt)!important;text-shadow:none!important;font-size:22px!important}
 .trend.up{color:var(--ok)!important;text-shadow:none!important}
 .trend.down{color:var(--red)!important;text-shadow:none!important}
-.metric.flash{animation:none!important;border-color:rgba(240,97,111,.5)!important}
+.metric.flash{animation:metricflashCalm .55s ease!important}
+@keyframes metricflashCalm{
+  0%{border-color:rgba(240,97,111,.42)}
+  100%{border-color:var(--line)}}
 
 /* ---------- боковая панель и меню ---------- */
 .sidebar{background:linear-gradient(180deg,rgba(10,14,22,.97),rgba(8,11,18,.99))!important;
