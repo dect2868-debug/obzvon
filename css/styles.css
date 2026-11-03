@@ -1337,3 +1337,113 @@ h1 span{background:linear-gradient(90deg,var(--txt),#9fb6d6)!important;
 #sumVerdict{text-shadow:none!important}
 .tag{border-color:rgba(76,201,224,.35)!important;color:var(--acc)!important}
 .tag-red{border-color:rgba(240,97,111,.45)!important;color:var(--red)!important}
+
+/* v4.8 · ЖИВАЯ ГРАФИКА — сдержанная анимация
+   Правило: движение медленное (≥ 6 с), низкоконтрастное, без мигания
+   и без эффектов поверх содержимого. Ничего не дёргается в глазах.
+   ============================================================ */
+
+:root{
+  --pulse:3.6s;
+}
+
+@media (prefers-reduced-motion:no-preference){
+
+  /* ---------- дыхание фона: одна мягкая тень за страницей ---------- */
+  .bg-fx::after{
+    content:'';position:absolute;inset:-10%;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(620px 420px at 22% 8%,rgba(76,201,224,.10),transparent 70%),
+      radial-gradient(560px 380px at 82% 92%,rgba(111,220,140,.07),transparent 70%);
+    opacity:.75;animation:bgBreathe 26s ease-in-out infinite alternate;
+  }
+  @keyframes bgBreathe{
+    0%{transform:translate3d(-2%,-1%,0) scale(1)}
+    100%{transform:translate3d(2%,2%,0) scale(1.06)}
+  }
+
+  /* ---------- тонкая линия под топбаром: медленный проход ---------- */
+  .topbar::after{
+    content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(76,201,224,.45) 38%,rgba(111,220,140,.28) 58%,transparent);
+    background-size:220% 100%;background-repeat:no-repeat;
+    animation:topSweep 18s ease-in-out infinite;opacity:.7;
+  }
+  @keyframes topSweep{
+    0%,12%{background-position:120% 0}
+    70%,100%{background-position:-40% 0}
+  }
+
+  /* ---------- мягкий блик по верхней кромке панелей ---------- */
+  .panel::after{
+    content:'';position:absolute;left:6%;right:6%;top:0;height:1px;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);
+    opacity:.5;animation:edgeGlow 14s ease-in-out infinite;
+  }
+  @keyframes edgeGlow{
+    0%,100%{opacity:.25;transform:translateX(-4%)}
+    50%{opacity:.75;transform:translateX(4%)}
+  }
+
+  /* ---------- «вспышка» карточки при изменении значения ---------- */
+  .metric.flash{animation:metricflashCalm .55s ease!important}
+  @keyframes metricflashCalm{
+    0%{border-color:rgba(240,97,111,.42);background-color:rgba(240,97,111,.05)}
+    100%{border-color:var(--line);background-color:transparent}
+  }
+
+  /* ---------- индикатор LIVE: спокойное «дыхание» ---------- */
+  .live-badge.on{animation:liveBreath 3.2s ease-in-out infinite!important}
+  @keyframes liveBreath{
+    0%,100%{opacity:.75;box-shadow:0 0 0 rgba(99,223,148,0)}
+    50%{opacity:1;box-shadow:0 0 12px rgba(99,223,148,.28)}
+  }
+
+  /* ---------- статус сессии «идёт»: мягкая пульсация точки ---------- */
+  .badge-run{animation:badgeBreath 3.4s ease-in-out infinite!important}
+  @keyframes badgeBreath{
+    0%,100%{opacity:.72}
+    50%{opacity:1}
+  }
+
+  /* ---------- активный пункт меню: живая метка ---------- */
+  .nav-link.active i{animation:iconBreath 4.2s ease-in-out infinite}
+  @keyframes iconBreath{
+    0%,100%{opacity:.7;transform:translateY(0)}
+    50%{opacity:1;transform:translateY(-1px)}
+  }
+
+  /* ---------- кнопки: лёгкий подъём без глитча ---------- */
+  .btn:not(:disabled){transition:transform .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}
+  .btn:not(:disabled):hover{transform:translateY(-1px)!important;box-shadow:0 4px 14px rgba(0,0,0,.28)!important}
+  .btn:not(:disabled):active{transform:translateY(0)!important}
+
+  /* ---------- карточки метрик: едва заметный подъём ---------- */
+  .metric{transition:transform .2s ease,border-color .2s ease,background .2s ease}
+  .metric:hover{transform:translateY(-2px)!important;border-color:rgba(120,150,190,.3)!important}
+
+  /* ---------- логотип: очень медленное покачивание ---------- */
+  .logo{animation:logoFloat 9s ease-in-out infinite!important}
+  @keyframes logoFloat{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-2px)}
+  }
+
+  /* ---------- гейт: спокойное вращение значка ---------- */
+  .gate-icon{animation:gateSpin 26s linear infinite!important;opacity:.75}
+  @keyframes gateSpin{to{transform:rotate(360deg)}}
+
+  /* ---------- тик живой точки на графике (рисуется в live.js) ---------- */
+  .live-panel{transition:border-color .3s ease}
+  .live-panel:hover{border-color:rgba(120,150,190,.24)!important}
+
+  /* ---------- полоса прогресса концентрации: плавный ход ---------- */
+  .metric .bar i{transition:width .5s cubic-bezier(.2,.7,.3,1),background .4s ease!important}
+}
+
+/* при «меньше движения» — всё статично */
+@media (prefers-reduced-motion:reduce){
+  .bg-fx::after,.topbar::after,.panel::after{display:none!important}
+  .live-badge.on,.badge-run,.nav-link.active i,.gate-icon,.logo{animation:none!important}
+  .metric.flash{animation:none!important}
+}

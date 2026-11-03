@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.7 · LIVE — живая динамика сессии
+   ОБЗВОН v4.8 · LIVE — живая динамика сессии
    График концентрации и «читомеряка» в реальном времени,
    отметки испытаний и нарушений, живая лента событий.
    v4.1: самопочинка (repair), адаптация к размеру окна,
@@ -317,8 +317,20 @@
       }
     });
 
-    /* последние значения */
+    /* «живая точка» на конце линии концентрации: медленное мягкое свечение */
     var lastS = samples[samples.length - 1];
+    var lx = px(lastS.t), ly = py(lastS.c);
+    var breathe = 0.5 + 0.5 * Math.sin(Date.now() / 900);
+    ctx.beginPath();
+    ctx.arc(lx, ly, 3.2 + breathe * 1.6, 0, 6.2832);
+    ctx.fillStyle = 'rgba(99,223,148,' + (0.10 + breathe * 0.12).toFixed(3) + ')';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(lx, ly, 2.1, 0, 6.2832);
+    ctx.fillStyle = '#63df94';
+    ctx.fill();
+
+    /* последние значения */
     ctx.font = '10px Consolas,monospace';
     ctx.textAlign = 'right';
     ctx.fillStyle = '#63df94';
