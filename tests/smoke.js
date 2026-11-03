@@ -18,45 +18,51 @@ const readme = read('README.md');
 const nav = read('js/nav.js');
 const live = read('js/live.js');
 const archive = read('js/archive.js');
+const health = read('js/health.js');
+
+/* текущая версия — из version.json (источник истины) */
+const V = version.v;
 
 const s = suite('SMOKE (статика и синхронизация версии)');
 
-s.test('version.json содержит версию 4.0', () => {
-  eq(version.v, '4.0', 'version.json');
+s.test('version.json содержит текущую версию', () => {
+  assert(/^\d+\.\d+$/.test(V), 'версия должна быть вида X.Y: ' + V);
 });
 
-s.test('CONFIG.appVersion в app.js = 4.0', () => {
-  assert(/appVersion:\s*'4\.0'/.test(app), 'в app.js нет appVersion 4.0');
+s.test('CONFIG.appVersion в app.js совпадает с version.json', () => {
+  const m = app.match(/appVersion:\s*'([^']+)'/);
+  assert(m, 'в app.js нет appVersion');
+  eq(m[1], V, 'appVersion');
 });
 
-s.test('отчёт монитора помечен как OBZVON-4.0', () => {
-  assert(/version:\s*'OBZVON-4\.0'/.test(monitor), 'в monitor.js нет OBZVON-4.0');
+s.test('отчёт монитора помечен актуальной версией', () => {
+  assert(monitor.includes("version: 'OBZVON-" + V + "'"), 'в monitor.js нет OBZVON-' + V);
 });
 
-s.test('в index.html все ?v= указывают на 4.0', () => {
+s.test('в index.html все ?v= указывают на текущую версию', () => {
   const vers = html.match(/\?v=[\d.]+/g) || [];
-  assert(vers.length >= 7, 'ожидалось минимум 7 ссылок с версией, найдено ' + vers.length);
-  const bad = vers.filter((v) => v !== '?v=4.0');
+  assert(vers.length >= 8, 'ожидалось минимум 8 ссылок с версией, найдено ' + vers.length);
+  const bad = vers.filter((v) => v !== '?v=' + V);
   eq(bad.length, 0, 'устаревшие версии в ссылках: ' + bad.join(', '));
-  assert(!/\?v=3\.8/.test(html), 'осталась ссылка на 3.8');
 });
 
-s.test('шапка сайта показывает ВЕРСИЯ 4.0', () => {
-  assert(/ВЕРСИЯ 4\.0/.test(html), 'в разметке нет «ВЕРСИЯ 4.0»');
+s.test('шапка сайта показывает актуальную версию', () => {
+  assert(html.includes('ВЕРСИЯ ' + V), 'в разметке нет «ВЕРСИЯ ' + V + '»');
   assert(/id="verBadge"/.test(html), 'нет метки версии verBadge');
 });
 
-s.test('новые файлы v4.0 подключены (live.js, archive.js)', () => {
-  assert(/js\/live\.js\?v=4\.0/.test(html), 'live.js не подключён');
-  assert(/js\/archive\.js\?v=4\.0/.test(html), 'archive.js не подключён');
-  assert(fs.existsSync(path.join(ROOT, 'js/live.js')), 'нет файла js/live.js');
-  assert(fs.existsSync(path.join(ROOT, 'js/archive.js')), 'нет файла js/archive.js');
+s.test('новые файлы подключены (live.js, archive.js, health.js)', () => {
+  ['js/live.js', 'js/archive.js', 'js/health.js'].forEach((f) => {
+    assert(html.includes(f + '?v=' + V), f + ' не подключён');
+    assert(fs.existsSync(path.join(ROOT, f)), 'нет файла ' + f);
+  });
 });
 
-s.test('README описывает версию 4.0', () => {
-  assert(/# ОБЗВОН v4\.0/.test(readme), 'заголовок README не обновлён');
+s.test('README описывает текущую версию', () => {
+  assert(new RegExp('# ОБЗВОН v' + V.replace(/\./g, '\\.')).test(readme), 'заголовок README не обновлён');
   assert(/жив/i.test(readme), 'в README нет описания живого графика');
   assert(/истори/i.test(readme), 'в README нет описания истории обзвонов');
+  assert(/обслуживан/i.test(readme), 'в README нет описания самообслуживания');
 });
 
 s.test('все id из списка els существуют в разметке', () => {
@@ -72,12 +78,15 @@ s.test('все пункты меню имеют свою страницу и н�
   const views = [...html.matchAll(/id="view-([a-z]+)"/g)].map((x) => x[1]);
   links.forEach((v) => assert(views.includes(v), 'нет страницы для пункта меню ' + v));
   views.forEach((v) => assert(links.includes(v), 'страница ' + v + ' не выведена в меню'));
-  assert(links.includes('archive'), 'нет пункта меню «История»');
+  ['archive', 'health'].forEach((v) => assert(links.includes(v), 'нет пункта меню ' + v));
 });
 
-s.test('элементы живого графика и истории присутствуют', () => {
-  ['liveChart', 'liveSummary', 'livePanel', 'archCards', 'archChart', 'archCompare',
-   'archTable', 'archCount', 'btnArchCsv', 'btnArchClear'].forEach((id) => {
+s.test('элементы живой динамики, истории и обслуживания присутствуют', () => {
+  ['liveChart', 'liveSummary', 'livePanel', 'liveNow', 'liveBadge', 'liveTicker',
+   'archCards', 'archChart', 'archCompare', 'archTable', 'archCount', 'btnArchCsv', 'btnArchClear',
+   'healthGrid', 'healthScore', 'healthRepair', 'healthLog',
+   'btnHealthCheck', 'btnHealthRepair', 'btnHealthReport', 'btnHealthClear'
+  ].forEach((id) => {
     assert(new RegExp('id="' + id + '"').test(html), 'нет элемента #' + id);
   });
 });
@@ -87,19 +96,19 @@ s.test('баннер обновления присутствует', () => {
     .forEach((id) => assert(new RegExp('id="' + id + '"').test(html), 'нет элемента #' + id));
 });
 
-s.test('страница «Новости» содержит запись v4.0', () => {
-  assert(/<div class="news-ver">v4\.0<\/div>/.test(html), 'нет записи v4.0 в новостях');
+s.test('страница «Новости» содержит запись текущей версии', () => {
+  assert(html.includes('<div class="news-ver">v' + V + '</div>'), 'нет записи v' + V + ' в новостях');
   const first = html.match(/news-ver">v([\d.]+)</);
-  eq(first && first[1], '4.0', 'самая свежая запись в новостях');
+  eq(first && first[1], V, 'самая свежая запись в новостях');
 });
 
 s.test('CSP-мета присутствует (защита от внедрения)', () => {
   assert(/http-equiv="Content-Security-Policy"/.test(html), 'нет CSP');
-  assert(/frame-ancestors/.test(html) || /default-src 'self'/.test(html), 'CSP слишком слабый');
+  assert(/default-src 'self'/.test(html), 'CSP слишком слабый');
 });
 
 s.test('в рабочем коде нет отладочных console.log', () => {
-  ['js/app.js', 'js/monitor.js', 'js/nav.js', 'js/fx.js', 'js/live.js', 'js/archive.js']
+  ['js/app.js', 'js/monitor.js', 'js/nav.js', 'js/fx.js', 'js/live.js', 'js/archive.js', 'js/health.js']
     .forEach((f) => {
       const code = read(f);
       const n = (code.match(/console\.log/g) || []).length;
@@ -107,12 +116,17 @@ s.test('в рабочем коде нет отладочных console.log', () 
     });
 });
 
-s.test('заголовки файлов помечены версией 4.0', () => {
-  assert(/ОБЗВОН v4\.0/.test(live), 'заголовок live.js');
-  assert(/ОБЗВОН v4\.0/.test(archive), 'заголовок archive.js');
-  assert(/ОБЗВОН v4\.0/.test(app), 'заголовок app.js');
-  assert(/ОБЗВОН v4\.0/.test(monitor), 'заголовок monitor.js');
-  assert(/ОБЗВОН v4\.0/.test(nav), 'заголовок nav.js');
+s.test('заголовки файлов помечены версией', () => {
+  [live, archive, health, app, monitor, nav].forEach((code) => {
+    assert(/ОБЗВОН v\d/.test(code), 'в заголовке нет пометки версии');
+  });
+});
+
+s.test('модуль самопочинки умеет чинить (в коде есть repair)', () => {
+  assert(/function repair/.test(health), 'в health.js нет функции repair');
+  assert(/Monitor\.restart/.test(health) || /'monitor'/.test(health), 'в health.js нет починки монитора');
+  assert(/Live\.repair/.test(health), 'в health.js нет починки графика');
+  assert(/selfRepair/.test(app), 'в app.js нет OBZ.selfRepair');
 });
 
 module.exports = s;

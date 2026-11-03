@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.0 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v4.1 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '4.0',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '4.1',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -49,7 +49,8 @@
     updateCheckMs: 60000,     // как часто проверять новую версию, мс
     autoUpdateMs: 5000,       // пауза перед авто-обновлением (вне сессии), мс
     postSessionUpdateMs: 20000, /* пауза перед обновлением после обзвона, мс */
-    integrityCheckMs: 20000   // как часто сверять целостность DOM и кода, мс
+    integrityCheckMs: 20000,  // как часто сверять целостность DOM и кода, мс
+    storageFallback: false      // true = localStorage недоступен, работаем в памяти
   };
 
   /* таймауты по типам испытаний (мс) */
@@ -135,8 +136,11 @@
    'btnPauseSelf','btnEndSelf','achRow','sessionStart','memValue','memBar','heapValue',
    'btnExportStats','btnImportStats','importFile','wmLayer',
     'updBanner','updTitle','updSub','updCount','btnUpdateNow','btnUpdateLater','btnUpdate','verBadge',
-    'liveChart','liveSummary','archCards','archChart','archCompare','archTable','archCount',
-    'btnArchCsv','btnArchClear']
+    'liveChart','liveSummary','liveNow','liveBadge','liveTicker',
+    'archCards','archChart','archCompare','archTable','archCount',
+    'btnArchCsv','btnArchClear',
+    'healthGrid','healthScore','healthRepair','healthLog',
+    'btnHealthCheck','btnHealthRepair','btnHealthReport','btnHealthClear']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- состояние ---------- */
@@ -502,7 +506,7 @@
     var taskHtml = '';
     if (kind === 'key') {
       CH.key = ABC[rnd(0, ABC.length - 1)];
-      taskHtml = 'НАЖМИТЕ КЛАВИСУ <b>' + CH.key + '</b>';
+      taskHtml = 'НАЖМИТЕ КЛАВИШУ <b>' + CH.key + '</b>';
     } else if (kind === 'hold') {
       taskHtml = 'УДЕРЖИВАЙТЕ <b>ПРОБЕЛ</b> ' + (CH.holdMs / 1000).toFixed(1) + ' СЕК.';
     } else if (kind === 'math') {
@@ -644,7 +648,7 @@
       if (CH.calib) {
         ST.calibFails++;
         toast('Испытание провалено — повторите калибровку', 'bad');
-        setTimeout(function () { ST.calibDone = 0; CH_LOG = []; updateTables(); els.calibStatus.innerHTML = '<span class="bad">калибровка не пройдена — попробуйте снова</span>'; ST.state = 'idle'; Monitor.setRunning(false); els.btnStart.disabled = !(ST.authed && ST.calibrated); }, 1200);
+        setTimeout(function () { ST.calibDone = 0; CH_LOG = []; updateTables(); els.calibStatus.innerHTML = '<span class="bad">калибровка не пройдена — попробуйте снова</span>'; ST.state = 'idle'; Monitor.setRunning(false); if (window.Live) Live.stop(); els.btnStart.disabled = !(ST.authed && ST.calibrated); }, 1200);
       } else {
         toast('Испытание провалено! +8 к «читомеряку»', 'bad');
         scheduleNext();
@@ -1219,6 +1223,7 @@
   function signPayload(p) { return sha256hex(JSON.stringify(p) + '|' + stateSecret()); }
 
   function saveState() {
+    if (CONFIG.storageFallback) return;
     if (['running', 'paused', 'locked'].indexOf(ST.state) < 0) return;
     try {
       var p = statePayload();
@@ -1301,6 +1306,10 @@
     data.memory = memStats();
     if (window.Live) data.live = Live.data();
     if (window.Archive) data.history = Archive.list();
+    if (window.Health) {
+      var hl = Health.last();
+      data.health = { score: hl ? hl.score : null, errors: Health.errors().length };
+    }
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1537,6 +1546,8 @@
     CH_LOG = [];           /* новая калибровка — чистый журнал */
     updateTables();
     Monitor.setRunning(true);   /* на калибровке тоже ловим смену вкладок и уходы */
+    /* график живой динамики включается сразу (v4.1) */
+    if (window.Live) { Live.reset(); Live.start(); }
     els.btnStart.disabled = true;
     els.calibStatus.innerHTML = '<span class="good">калибровка началась…</span>';
     runChallenge(kindRoll(true), true);
@@ -1566,10 +1577,13 @@
     focus: updateMetrics,
     tick: function () {
       updateMetrics();
-      if (ST.state === 'running') {
-        els.sessionTimer.textContent = fmt(elapsed());
+      /* живая динамика работает и на калибровке, и на сеансе (v4.1) */
+      if (ST.state === 'running' || ST.state === 'calib') {
+        if (ST.state === 'running') {
+          els.sessionTimer.textContent = fmt(elapsed());
+          if (shouldLock()) lockSession();
+        }
         if (window.Live) Live.sample(Monitor.concentration(), Monitor.cheatPercent());
-        if (shouldLock()) lockSession();
       }
     }
   }, { idleLimit: CONFIG.idleLimit });
@@ -1737,6 +1751,7 @@
     b.hidden = false;
     clearTimeout(b._t);
     b._t = setTimeout(function () { b.hidden = true; }, 12000);
+    if (window.Health) Health.log('error', e.message || 'неизвестная ошибка скрипта');
   });
 
   /* ============================================================
@@ -1895,6 +1910,41 @@
      Небольшой публичный API без доступа к коду куратора и без
      возможности отключить проверки: используется автотестами и
      для проверки целостности страницы из консоли куратора. */
+  /* ---------- сторож системы (v4.1) ----------
+     Система сама следит за собой: зависший монитор перезапускается,
+     «мёртвый» график пересоздаётся — без участия человека. */
+  var watchdog = { checks: 0, repairs: 0, lastSample: -1, lastSeen: Date.now(), lastRepair: '' };
+  setInterval(function () {
+    watchdog.checks++;
+    var st = (window.OBZ && OBZ.state) ? OBZ.state() : null;
+    if (!st) return;
+    if (st.state !== 'running' && st.state !== 'calib') return;
+
+    /* 1) монитор жив? */
+    var last = (window.Monitor && Monitor.lastTickAt) ? Monitor.lastTickAt() : 0;
+    if (last && Date.now() - last > 7000) {
+      watchdog.repairs++;
+      watchdog.lastRepair = 'перезапуск монитора';
+      try { Monitor.restart(); } catch (e) {}
+      if (window.Health) Health.log('warn', 'Сторож: монитор не отвечал — перезапущен');
+    }
+
+    /* 2) график растёт? */
+    if (window.Live) {
+      var n = Live.stats().n;
+      if (n !== watchdog.lastSample) {
+        watchdog.lastSample = n;
+        watchdog.lastSeen = Date.now();
+      } else if (Date.now() - watchdog.lastSeen > 12000) {
+        watchdog.repairs++;
+        watchdog.lastRepair = 'пересоздание графика';
+        try { Live.repair(); } catch (e2) {}
+        if (window.Health) Health.log('warn', 'Сторож: график перестал обновляться — пересоздан');
+        watchdog.lastSeen = Date.now();
+      }
+    }
+  }, 5000);
+
   window.OBZ = {
     v: CONFIG.appVersion,
     state: function () {
@@ -1907,7 +1957,28 @@
     integrity: function () { return domIntegrity(); },
     fingerprint: function () { return codeFingerprint(); },
     guard: function () { codeGuard(); },
-    update: function (v) { showUpdateBanner(v || 'next'); }
+    update: function (v) { showUpdateBanner(v || 'next'); },
+    /* починка на уровне приложения (вызывается модулем здоровья) */
+    selfRepair: function (what) {
+      var acts = [];
+      if (what === 'ui') {
+        try {
+          var busy = ['running', 'paused', 'locked'].indexOf(ST.state) >= 0;
+          els.gate.hidden = busy;
+          els.playfield.hidden = !busy;
+          els.partPanel.hidden = !busy;
+          updateWatermark();
+          updateMetrics();
+          acts.push('интерфейс синхронизирован с состоянием «' + ST.state + '»');
+        } catch (e) {}
+      }
+      if (what === 'memory') {
+        CONFIG.storageFallback = true;
+        acts.push('localStorage недоступен — данные только в памяти вкладки');
+      }
+      return acts.join('; ');
+    },
+    watchdog: function () { return { checks: watchdog.checks, repairs: watchdog.repairs, last: watchdog.lastRepair }; }
   };
 
   updateMetrics();

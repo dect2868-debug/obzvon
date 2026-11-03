@@ -987,3 +987,77 @@ th.sorted{animation:thPulse .3s ease}
   .upd-count{width:100%;text-align:center}
   #liveChart{height:130px}
 }
+
+/* ============================================================
+   ОБЗВОН v4.1 · САМООБСЛУЖИВАНИЕ: живая динамика и
+   страница «Обслуживание»
+   ============================================================ */
+
+/* ---------- живая динамика: шапка, LIVE, лента событий ---------- */
+.live-head-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.live-badge{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:#04121c;
+  padding:3px 9px;border-radius:20px;background:linear-gradient(135deg,var(--acc2),var(--acc));
+  box-shadow:0 0 14px rgba(91,255,157,.45)}
+.live-badge.on{animation:livePulse 1.6s ease-in-out infinite}
+@keyframes livePulse{0%,100%{opacity:.75;box-shadow:0 0 10px rgba(91,255,157,.35)}50%{opacity:1;box-shadow:0 0 22px rgba(91,255,157,.7)}}
+.live-now{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--dim)}
+.live-now b{color:var(--acc);font-weight:700}
+.live-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.05)}
+.live-summary{font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--dim)}
+.live-summary b{color:var(--acc);font-weight:700}
+.live-ticker{font-family:var(--mono);font-size:10.5px;color:#4d6288;max-width:52%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-ticker.has{color:var(--warn)}
+
+/* ---------- страница «Обслуживание» ---------- */
+.health-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.hcard{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:12px;
+  border:1px solid var(--line);background:rgba(10,17,30,.55);transition:.2s}
+.hcard.ok{border-color:rgba(91,255,157,.28)}
+.hcard.bad{border-color:rgba(255,77,109,.45);background:rgba(255,77,109,.06)}
+.hcard-icon{flex-shrink:0;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;
+  font-family:var(--mono);font-size:13px;font-weight:700}
+.hcard.ok .hcard-icon{color:#04121c;background:linear-gradient(135deg,var(--acc2),var(--ok));
+  box-shadow:0 0 12px rgba(91,255,157,.4)}
+.hcard.bad .hcard-icon{color:#fff;background:linear-gradient(135deg,var(--red),#ff7a5c);
+  box-shadow:0 0 12px rgba(255,77,109,.45)}
+.hcard-body{display:flex;flex-direction:column;gap:3px;min-width:0}
+.hcard-body b{font-size:12.5px;letter-spacing:.4px;color:var(--txt)}
+.hcard-body span{font-family:var(--mono);font-size:10.5px;color:var(--dim);line-height:1.5;
+  word-break:break-word}
+.hcard.bad .hcard-body span{color:#ffa9b8}
+
+.health-repair{margin-top:12px;min-height:0}
+.health-ok{padding:11px 14px;border-radius:12px;border:1px solid rgba(91,255,157,.3);
+  background:rgba(91,255,157,.07);font-family:var(--mono);font-size:11.5px;color:var(--ok)}
+.health-fixed,.health-failed{padding:11px 14px;border-radius:12px;margin-bottom:8px;
+  font-family:var(--mono);font-size:11px;line-height:1.6}
+.health-fixed{border:1px solid rgba(91,255,157,.3);background:rgba(91,255,157,.06);color:var(--ok)}
+.health-failed{border:1px solid rgba(255,184,77,.35);background:rgba(255,184,77,.06);color:var(--warn)}
+.health-fixed ul,.health-failed ul{margin:6px 0 0;padding-left:18px}
+
+.health-log-wrap{margin-top:14px}
+.health-log-title{font-family:var(--mono);font-size:10.5px;letter-spacing:2.5px;color:var(--dim);
+  margin-bottom:8px}
+.health-log{list-style:none;max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+.health-log li{display:flex;gap:12px;align-items:baseline;font-family:var(--mono);font-size:11px;
+  padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.025);border-left:3px solid var(--dim)}
+.health-log li time{color:#4d6288;flex-shrink:0}
+.health-log li i{color:#4d6288;font-style:normal}
+.health-log li.hl-warn{border-left-color:var(--warn);background:rgba(255,184,77,.06)}
+.health-log li.hl-error{border-left-color:var(--red);background:rgba(255,77,109,.07)}
+.health-log li.hl-info{border-left-color:var(--acc);background:rgba(52,231,255,.05)}
+.health-log .health-empty{justify-content:center;color:var(--dim);border-left-color:transparent;
+  background:none!important;text-align:center}
+
+#healthScore.good{color:var(--ok)}
+#healthScore.warn{color:var(--warn)}
+#healthScore.bad{color:var(--red)}
+
+@media(max-width:640px){
+  .live-foot{flex-direction:column;align-items:flex-start}
+  .live-ticker{max-width:100%}
+  .health-grid{grid-template-columns:1fr}
+}

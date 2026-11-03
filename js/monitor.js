@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.0 :: MONITOR  (детект нарушений + система кандидата)
+   ОБЗВОН v4.1 :: MONITOR  (детект нарушений + система кандидата)
    v4.0: авто-тесты браузера, захват экрана (WebRTC), вторая
    вкладка, подмена часов, пауза-отладчик, расширенный список
    блокируемых сочетаний.
@@ -39,7 +39,9 @@ window.Monitor = (function () {
     secondTab: false,      /* страница открыта во второй вкладке */
     clockTamper: false,    /* подмена системных часов */
     blockedPrint: 0,
-    tabId: null
+    tabId: null,
+    _attached: false,
+    lastTickAt: 0
   };
 
   var cfg = {
@@ -444,6 +446,7 @@ window.Monitor = (function () {
       emit('idle', 'Бездействие более ' + Math.round(cfg.idleLimit / 1000) + ' с (анти-AFK)', 2, 1);
     }
 
+    S.lastTickAt = now();
     if (cb.tick) cb.tick();
   }
 
@@ -467,22 +470,32 @@ window.Monitor = (function () {
     S.lastFp = fingerprint();
     S.lastScreenX = window.screenX !== undefined ? window.screenX : window.screenLeft;
 
-    document.addEventListener('keydown', onKey, true);
-    document.addEventListener('contextmenu', onCopyBlock);
-    document.addEventListener('copy', onCopyBlock);
-    document.addEventListener('cut', onCopyBlock);
-    document.addEventListener('selectstart', onCopyBlock);
-    document.addEventListener('dragstart', onCopyBlock);
-    document.addEventListener('beforeprint', onPrint);
-    document.addEventListener('mousemove', onActivity, { passive: true });
-    document.addEventListener('pointerdown', onActivity, { passive: true });
-    document.addEventListener('touchstart', onActivity, { passive: true });
-    document.addEventListener('wheel', onActivity, { passive: true });
-    window.addEventListener('blur', handleBlur);
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('beforeunload', onBlur);
+    if (!S._attached) {
+      S._attached = true;
+      document.addEventListener('keydown', onKey, true);
+      document.addEventListener('contextmenu', onCopyBlock);
+      document.addEventListener('copy', onCopyBlock);
+      document.addEventListener('cut', onCopyBlock);
+      document.addEventListener('selectstart', onCopyBlock);
+      document.addEventListener('dragstart', onCopyBlock);
+      document.addEventListener('beforeprint', onPrint);
+      document.addEventListener('mousemove', onActivity, { passive: true });
+      document.addEventListener('pointerdown', onActivity, { passive: true });
+      document.addEventListener('touchstart', onActivity, { passive: true });
+      document.addEventListener('wheel', onActivity, { passive: true });
+      window.addEventListener('blur', handleBlur);
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibility);
+      window.addEventListener('beforeunload', onBlur);
+    }
 
+    armTimers();
+  }
+
+  /* таймеры монитора вынесены, чтобы их можно было перезапустить (v4.1) */
+  function armTimers() {
+    clearInterval(S._t); clearInterval(S._f);
+    clearInterval(S._tab); clearInterval(S._clk); clearInterval(S._dbg);
     S._t = setInterval(tick, cfg.tickInterval);
     S._f = setInterval(fpCheck, cfg.fpInterval);
     /* защита v4.0: пульс вкладок, часы, отладчик */
@@ -492,6 +505,16 @@ window.Monitor = (function () {
     tabHeartbeat();
     patchGetDisplayMedia();
   }
+
+  /* перезапуск монитора, если его таймеры зависли (самопочинка v4.1) */
+  function restart() {
+    armTimers();
+    S.lastActivity = now();
+    return true;
+  }
+
+  /* когда монитор последний раз «дышал» — для сторожа (v4.1) */
+  function lastTickAt() { return S.lastTickAt || 0; }
 
   function setRunning(v) {
     S.running = !!v;
@@ -545,7 +568,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-4.0',
+      version: 'OBZVON-4.1',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,
@@ -596,6 +619,7 @@ window.Monitor = (function () {
     detect: detect, report: report, reset: reset, cheatPercent: cheatPercent,
     concentration: concentration, focusRatio: focusRatio, avgReaction: avgReaction,
     penalty: penalty, setBaseline: setBaseline,
+    restart: restart, lastTickAt: lastTickAt,
     /* защита v4.0 — наружу, чтобы проверки можно было запускать из тестов */
     guards: {
       detectAutomation: detectAutomation,

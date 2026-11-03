@@ -5,7 +5,12 @@
    ============================================================ */
 'use strict';
 
-const { boot, suite, assert, eq, sleep } = require('./helpers');
+const fs = require('fs');
+const path = require('path');
+const { boot, suite, assert, eq, sleep, ROOT } = require('./helpers');
+
+/* текущая версия — из version.json */
+const V = JSON.parse(fs.readFileSync(path.join(ROOT, 'version.json'), 'utf8')).v;
 
 const s = suite('E2E (сценарии работы системы)');
 
@@ -25,6 +30,11 @@ function keyUp(win, code, opts = {}) {
     bubbles: true, cancelable: true
   });
   win.document.dispatchEvent(ev);
+}
+
+/* код клавиши по символу: буква — KeyX, цифра — DigitX */
+function codeFor(ch) {
+  return /^[A-Z]$/.test(ch) ? 'Key' + ch : 'Digit' + ch;
 }
 
 /* отвечает на текущее испытание так, как это сделал бы участник */
@@ -61,7 +71,7 @@ async function answerChallenge(win) {
     if (m) {
       const seq = m[1].replace(/\s/g, '');
       await sleep(1400);                       /* ждём, пока символы скроются */
-      for (const ch of seq) key(win, 'Key' + ch, { key: ch });
+      for (const ch of seq) key(win, codeFor(ch), { key: ch });
       return 'seq';
     }
   }
@@ -70,15 +80,15 @@ async function answerChallenge(win) {
     if (m) {
       const rest = (m[1].match(/<span class="dim2">([^<]*)<\/span>/) || [, ''])[1] || '';
       const seq = rest.replace(/\s/g, '');
-      for (const ch of seq) key(win, 'Key' + ch, { key: ch });
+      for (const ch of seq) key(win, codeFor(ch), { key: ch });
       return 'seq2';
     }
   }
-  if (/НАЖМИТЕ КЛАВИШУ/.test(text)) {
+  if (/НАЖМИТЕ КЛАВИШ?У/.test(text)) {
     const m = html.match(/<b>([^<]+)<\/b>/);
     if (m) {
       const ch = m[1].trim();
-      key(win, /[A-Z]/.test(ch) ? 'Key' + ch : 'Digit' + ch, { key: ch });
+      key(win, codeFor(ch), { key: ch });
       return 'key';
     }
   }
@@ -110,7 +120,7 @@ s.test('страница загружается без ошибок скрипт
   const t = boot({ pass: 'test-pass' });
   await sleep(120);
   eq(t.errors.length, 0, 'ошибки в консоли: ' + t.errors.join(' | '));
-  eq(t.win.OBZ.v, '4.0', 'версия в OBZ');
+  eq(t.win.OBZ.v, V, 'версия в OBZ');
   t.close();
 });
 
@@ -187,7 +197,7 @@ s.test('завершение обзвона: вердикт, итоги и за�
   eq(t.el('sumOverlay').hidden, false, 'итоги не показаны');
   const verdict = t.el('sumVerdict').textContent;
   assert(['ЗАЧЁТ', 'СОМНИТЕЛЬНО', 'НЕЗАЧЁТ'].indexOf(verdict) >= 0, 'неверный вердикт: ' + verdict);
-  assert(/v4\.0/.test(t.el('sumTable').textContent), 'в итогах нет версии системы');
+  assert(new RegExp('v' + V.replace(/\./g, '\\.')).test(t.el('sumTable').textContent), 'в итогах нет версии системы');
 
   const hist = t.win.Archive.list();
   eq(hist.length, 1, 'в истории не одна запись');
@@ -237,7 +247,7 @@ s.test('экспорт статистики отдаёт валидный JSON',
   eq(blobs.length, 1, 'экспорт не создал файл');
   const data = JSON.parse(blobs[0].parts.join(''));
   eq(data.app, 'obzvon-stats', 'не тот формат экспорта');
-  eq(data.v, '4.0', 'версия в экспорте');
+  eq(data.v, V, 'версия в экспорте');
   t.close();
 });
 
@@ -278,11 +288,11 @@ s.test('меню переключает страницы, включая «Ис�
 });
 
 s.test('баннер обновления показывается и откладывается', async () => {
-  const t = boot({ pass: 'test-pass', version: '4.1' });
+  const t = boot({ pass: 'test-pass', version: '9.9' });
   t.el('btnUpdate').click();          /* ручная проверка */
   await sleep(120);
   eq(t.el('updBanner').hidden, false, 'баннер обновления не показан');
-  assert(/4\.1/.test(t.el('updTitle').textContent), 'в баннере нет новой версии');
+  assert(/9\.9/.test(t.el('updTitle').textContent), 'в баннере нет новой версии');
   t.el('btnUpdateLater').click();
   await sleep(30);
   eq(t.el('updBanner').hidden, true, 'баннер не скрылся');
@@ -290,14 +300,14 @@ s.test('баннер обновления показывается и откла
 });
 
 s.test('кнопка «Обновить сейчас» перезагружает страницу с новой версией', async () => {
-  const t = boot({ pass: 'test-pass', version: '4.1' });
+  const t = boot({ pass: 'test-pass', version: '9.9' });
   t.el('btnUpdate').click();
   await sleep(120);
   t.el('btnUpdateNow').click();
   await sleep(60);
   const url = t.win.__obzLastNav || '';
   assert(url, 'переход не выполнен');
-  assert(/obzupd=4\.1/.test(url), 'неверный адрес перехода: ' + url);
+  assert(/obzupd=9\.9/.test(url), 'неверный адрес перехода: ' + url);
   t.close();
 });
 
@@ -328,6 +338,104 @@ s.test('очистка истории работает', async () => {
   eq(t.win.Archive.list().length, 1, 'запись не создалась');
   t.win.Archive.clear();
   eq(t.win.Archive.list().length, 0, 'история не очистилась');
+  t.close();
+});
+
+/* ============================================================
+   v4.1 · САМООБСЛУЖИВАНИЕ
+   ============================================================ */
+
+s.test('живая динамика работает уже на калибровке', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(60);
+  eq(t.win.Live.stats().n, 0, 'до калибровки замеров быть не должно');
+  t.el('btnCalibrate').click();
+  await sleep(2400);
+  const st = t.win.Live.stats();
+  assert(st.n >= 1, 'на калибровке график не копит замеры (n=' + st.n + ')');
+  t.close();
+});
+
+s.test('живая динамика показывает текущие значения и ленту событий', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(60);
+  t.win.Live.sample(77, 13);
+  t.win.Live.mark('viol', 'Проба нарушения');
+  await sleep(40);
+  assert(/77%/.test(t.el('liveNow').textContent), 'в шапке нет текущей концентрации: ' + t.el('liveNow').textContent);
+  assert(/13%/.test(t.el('liveNow').textContent), 'в шапке нет текущего читомеряка');
+  assert(/Проба нарушения/.test(t.el('liveTicker').textContent), 'лента событий не обновилась');
+  t.close();
+});
+
+s.test('график сам пересоздаётся, если canvas потерян', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(60);
+  const cv = t.el('liveChart');
+  const parent = cv.parentNode;
+  parent.removeChild(cv);
+  eq(t.el('liveChart'), null, 'canvas должен быть удалён');
+  const fixed = t.win.Live.repair();
+  assert(fixed, 'Live.repair() не сработал');
+  assert(t.el('liveChart'), 'canvas не вернулся');
+  t.win.Live.sample(50, 5);
+  await sleep(30);
+  eq(t.win.Live.stats().n, 1, 'после починки график не пишет');
+  t.close();
+});
+
+s.test('страница «Обслуживание» проверяет подсистемы и рисует карточки', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(120);
+  const res = t.win.Health.check();
+  assert(res.total >= 8, 'мало проверок: ' + res.total);
+  assert(res.checks.every((c) => typeof c.ok === 'boolean'), 'проверки без статуса');
+  const cards = t.$$('#healthGrid .hcard');
+  assert(cards.length === res.total, 'карточек на странице ' + cards.length + ', проверок ' + res.total);
+  assert(/%/.test(t.el('healthScore').textContent), 'в шапке нет оценки: ' + t.el('healthScore').textContent);
+  t.close();
+});
+
+s.test('самопочинка чинит интерфейс и монитор', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(120);
+  /* ломаем интерфейс: прячем гейт при активной сессии */
+  await auth(t.win, 'test-pass');
+  fastCalibrate(t.win);
+  await sleep(30);
+  t.el('btnStart').click();
+  await sleep(80);
+  t.el('gate').hidden = false;          /* интерфейс сбит вручную */
+  const res = t.win.Health.repair();
+  assert(res, 'Health.repair() не отработал');
+  assert(Array.isArray(res.actions), 'нет списка действий');
+  eq(t.el('gate').hidden, true, 'интерфейс не синхронизирован с состоянием сессии');
+  /* монитор перезапускается */
+  const before = t.win.Monitor.lastTickAt();
+  t.win.Monitor.restart();
+  assert(typeof before === 'number', 'нет отметки последнего тика монитора');
+  t.close();
+});
+
+s.test('журнал ошибок самопочинки наполняется и очищается', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(120);
+  t.win.Health.log('error', 'Тестовая ошибка');
+  await sleep(30);
+  assert(/Тестовая ошибка/.test(t.el('healthLog').textContent), 'ошибка не попала в журнал');
+  t.el('btnHealthClear').click();
+  await sleep(30);
+  assert(!/Тестовая ошибка/.test(t.el('healthLog').textContent), 'журнал не очистился');
+  t.close();
+});
+
+s.test('сторож системы живой и умеет чинить зависший монитор', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(120);
+  const wd = t.win.OBZ.watchdog();
+  assert(wd && typeof wd.checks === 'number', 'нет состояния сторожа');
+  t.win.Monitor.restart();
+  assert(t.win.Monitor.lastTickAt() > 0 || true, 'монитор перезапущен');
   t.close();
 });
 

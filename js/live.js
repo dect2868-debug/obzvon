@@ -1,37 +1,72 @@
 /* ============================================================
-   ОБЗВОН v4.0 · LIVE — живой график сессии в реальном времени
-   Концентрация и «читомеряк» в динамике, отметки испытаний
-   и нарушений. Рисуется на canvas, работает и на file://.
+   ОБЗВОН v4.1 · LIVE — живая динамика сессии
+   График концентрации и «читомеряка» в реальном времени,
+   отметки испытаний и нарушений, живая лента событий.
+   v4.1: самопочинка (repair), адаптация к размеру окна,
+   работает с самого начала обзвона (включая калибровку),
+   значения в шапке панели и пульсирующий индикатор LIVE.
    ============================================================ */
 (function () {
   'use strict';
 
-  var MAX_SAMPLES = 900;   /* замер раз в секунду ≈ 15 минут сессии */
-  var MAX_MARKS = 400;
+  var MAX_SAMPLES = 1200;  /* замер раз в секунду ≈ 20 минут сессии */
+  var MAX_MARKS = 600;
   var H = 150;             /* высота графика, px */
 
   var cv = null, ctx = null;
   var samples = [];        /* {t: мс от старта, c: концентрация, x: читомеряк} */
-  var marks = [];          /* {t, kind: ok|fail|viol} */
+  var marks = [];          /* {t, kind: ok|fail|viol, label} */
   var t0 = 0;
   var timer = null;
   var running = false;
   var last = { c: 0, x: 0 };
+  var lastEvent = '';
   var stats = { max: 0, min: 100, sum: 0, n: 0, peakCheat: 0 };
+  var ro = null;
 
   function el(id) { return document.getElementById(id); }
 
-  function init() {
+  /* ---------- canvas: создаём и восстанавливаем при необходимости ---------- */
+
+  /* если элемент графика удалили — создаём его заново (самопочинка v4.1) */
+  function recreateCanvas() {
+    var host = el('livePanel') || el('liveSummary');
+    if (!host) return null;
+    var box = host.querySelector('.panel-body') || host;
+    var nc = document.createElement('canvas');
+    nc.id = 'liveChart';
+    nc.width = 640; nc.height = H;
+    nc.setAttribute('aria-label', 'График концентрации и читомеряка');
+    var first = box.querySelector('canvas');
+    if (first && first.parentNode) first.parentNode.replaceChild(nc, first);
+    else box.insertBefore(nc, box.firstChild);
+    return nc;
+  }
+
+  function ensureCanvas() {
     cv = el('liveChart');
-    if (!cv || !cv.getContext) return;
-    ctx = cv.getContext('2d');
-    window.addEventListener('resize', resize, { passive: true });
-    resize();
-    updateSummary();
+    if (!cv) { cv = recreateCanvas(); ctx = null; }
+    if (!cv) return false;
+    if (!ctx) {
+      try { ctx = cv.getContext('2d'); } catch (e) { ctx = null; }
+    }
+    /* контекст мог быть потерян — пробуем пересоздать */
+    if (!ctx && cv.getContext) {
+      try { ctx = cv.getContext('2d'); } catch (e2) { ctx = null; }
+    }
+    return !!ctx;
+  }
+
+  function observe() {
+    if (ro || !window.ResizeObserver) return;
+    try {
+      ro = new ResizeObserver(function () { resize(); });
+      if (cv && cv.parentNode) ro.observe(cv.parentNode);
+    } catch (e) { ro = null; }
   }
 
   function resize() {
-    if (!cv || !ctx) return;
+    if (!ensureCanvas()) return;
     var w = Math.max(200, cv.clientWidth || 640);
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     cv.width = Math.round(w * dpr);
@@ -39,6 +74,26 @@
     cv.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     draw();
+  }
+
+  function init() {
+    ensureCanvas();
+    observe();
+    window.addEventListener('resize', resize, { passive: true });
+    resize();
+    updateSummary();
+    updateNow();
+  }
+
+  /* самопочинка: если canvas пропал или контекст не отдал — пересоздаём */
+  function repair() {
+    var ok = ensureCanvas();
+    if (!ok) return false;
+    observe();
+    resize();
+    updateSummary();
+    updateNow();
+    return true;
   }
 
   function fmtT(ms) {
@@ -51,6 +106,12 @@
     return m > 0 ? m + ':' + p(sec) : (sec + ' с');
   }
 
+  function fmtClock(ts) {
+    var d = new Date(ts);
+    function p(n) { return ('0' + n).slice(-2); }
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
   /* ---------- данные ---------- */
 
   function reset() {
@@ -58,8 +119,11 @@
     marks = [];
     t0 = Date.now();
     last = { c: 0, x: 0 };
+    lastEvent = '';
     stats = { max: 0, min: 100, sum: 0, n: 0, peakCheat: 0 };
     updateSummary();
+    updateNow();
+    updateTicker();
     draw();
   }
 
@@ -76,32 +140,50 @@
     stats.peakCheat = Math.max(stats.peakCheat, x);
     stats.sum += c; stats.n++;
     updateSummary();
+    updateNow();
     draw();
   }
 
-  function mark(kind) {
-    if (!samples.length) return;
-    marks.push({ t: Date.now() - t0, kind: kind || 'viol' });
+  function mark(kind, label) {
+    if (!samples.length && !t0) t0 = Date.now();
+    marks.push({ t: Date.now() - t0, kind: kind || 'viol', label: label || '' });
     if (marks.length > MAX_MARKS) marks.shift();
+    if (label) { lastEvent = label; updateTicker(); }
     draw();
   }
 
   function start() {
     if (running) return;
     running = true;
+    if (!t0) t0 = Date.now();
     clearInterval(timer);
     timer = setInterval(function () { sample(last.c, last.x); }, 1000);
+    setLive(true);
   }
 
   function stop() {
     running = false;
     clearInterval(timer);
     timer = null;
+    setLive(false);
     updateSummary();
     draw();
   }
 
-  /* ---------- сводка под графиком ---------- */
+  function setLive(on) {
+    var badge = el('liveBadge');
+    if (!badge) return;
+    badge.hidden = !on;
+    if (on) badge.classList.add('on');
+  }
+
+  /* ---------- значения в шапке и сводка ---------- */
+
+  function updateNow() {
+    var box = el('liveNow');
+    if (!box) return;
+    box.innerHTML = 'КОНЦ <b>' + last.c + '%</b> · ЧИТ <b>' + last.x + '%</b>';
+  }
 
   function updateSummary() {
     var box = el('liveSummary');
@@ -116,19 +198,28 @@
     box.innerHTML = parts.join(' · ');
   }
 
+  function updateTicker() {
+    var box = el('liveTicker');
+    if (!box) return;
+    if (!lastEvent) { box.textContent = 'событий пока нет'; box.classList.remove('has'); return; }
+    box.textContent = fmtClock(Date.now()) + ' · ' + lastEvent;
+    box.classList.add('has');
+  }
+
   /* ---------- отрисовка ---------- */
 
   function draw() {
-    if (!ctx) return;
-    var w = cv.width / (Math.min(window.devicePixelRatio || 1, 2)) || cv.clientWidth || 640;
+    if (!ensureCanvas()) return;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.width / dpr || cv.clientWidth || 640;
     var h = H;
     ctx.clearRect(0, 0, w, h);
 
-    var padL = 30, padR = 10, padT = 12, padB = 20;
+    var padL = 30, padR = 44, padT = 12, padB = 20;
     var gw = Math.max(10, w - padL - padR);
     var gh = Math.max(10, h - padT - padB);
 
-    /* сетка */
+    /* сетка — рисуется всегда, чтобы панель не выглядела «мёртвой» */
     ctx.font = '9px Consolas,monospace';
     ctx.textBaseline = 'middle';
     [0, 25, 50, 75, 100].forEach(function (v) {
@@ -142,10 +233,20 @@
     });
 
     if (samples.length < 2) {
-      ctx.fillStyle = 'rgba(125,140,163,.55)';
+      /* ожидание: пульсирующая линия + подсказка */
+      var pulse = 0.5 + 0.5 * Math.sin(Date.now() / 400);
+      ctx.strokeStyle = 'rgba(52,231,255,' + (0.25 + pulse * 0.3).toFixed(3) + ')';
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(padL, padT + gh / 2);
+      ctx.lineTo(padL + gw, padT + gh / 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(125,140,163,.75)';
       ctx.textAlign = 'center';
       ctx.font = '11px Consolas,monospace';
-      ctx.fillText('ожидание данных сессии…', padL + gw / 2, padT + gh / 2);
+      ctx.fillText(running ? 'идёт измерение…' : 'ожидание данных сессии…', padL + gw / 2, padT + gh / 2 - 14);
       return;
     }
 
@@ -221,16 +322,16 @@
     ctx.font = '10px Consolas,monospace';
     ctx.textAlign = 'right';
     ctx.fillStyle = '#5bff9d';
-    ctx.fillText(lastS.c + '%', w - padR, py(lastS.c) - 6);
+    ctx.fillText(lastS.c + '%', w - padR + 38, py(lastS.c) - 6);
     ctx.fillStyle = '#ff4d6d';
-    ctx.fillText(lastS.x + '%', w - padR, py(lastS.x) + 8);
+    ctx.fillText(lastS.x + '%', w - padR + 38, py(lastS.x) + 8);
 
     /* ось времени */
     ctx.fillStyle = 'rgba(125,140,163,.75)';
     ctx.textAlign = 'left';
     ctx.fillText('0:00', padL, h - 7);
     ctx.textAlign = 'right';
-    ctx.fillText(fmtT(tMax), w - padR, h - 7);
+    ctx.fillText(fmtT(tMax), w - padR + 38, h - 7);
   }
 
   /* ---------- публичный API ---------- */
@@ -241,6 +342,9 @@
     mark: mark,
     start: start,
     stop: stop,
+    repair: repair,
+    running: function () { return running; },
+    lastSampleAt: function () { return samples.length ? samples[samples.length - 1].t : 0; },
     stats: function () {
       return {
         avg: stats.n ? Math.round(stats.sum / stats.n) : 0,
