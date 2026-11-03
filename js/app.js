@@ -24,7 +24,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '3.2',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '3.3',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -1299,7 +1299,9 @@
   /* ---------- память: сколько сайт занимает у ПК ----------
      navigator.deviceMemory — общий объём RAM (ГБ, есть не везде);
      performance.memory — JS-heap страницы (только Chromium);
-     performance.memory.usedJSHeapSize — реально занятые страницей килобайты. */
+     performance.memory.usedJSHeapSize — реально занятые страницей килобайты;
+     navigator.storage.estimate() — место на диске под сайт (quota/usage);
+     localStorage — размер данных этой страницы в браузере. */
   function memStats() {
     var out = { pageMB: null, heapMB: null, limitMB: null, totalRAM: navigator.deviceMemory || null };
     try {
@@ -1311,6 +1313,53 @@
       }
     } catch (e) {}
     return out;
+  }
+  function lsSizeKB() {
+    try {
+      var units = 0;
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        units += (k ? k.length : 0) + ((localStorage.getItem(k) || '').length);
+      }
+      /* значения в UTF-16: 1 символ ≈ 2 байта */
+      return Math.round((units * 2) / 1024);
+    } catch (e) { return null; }
+  }
+  function setText(id, txt) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  }
+  function setWidth(id, pct) {
+    var el = document.getElementById(id);
+    if (el) el.style.width = Math.max(1, Math.min(100, pct)) + '%';
+  }
+  var sparkData = [];
+  function drawSpark() {
+    var cv = document.getElementById('memSpark');
+    if (!cv || !cv.getContext) return;
+    var ctx = cv.getContext('2d');
+    var w = cv.width = Math.max(120, cv.clientWidth || 520);
+    var h = cv.height = 76;
+    ctx.clearRect(0, 0, w, h);
+    if (sparkData.length < 2) return;
+    var max = Math.max.apply(null, sparkData), min = Math.min.apply(null, sparkData);
+    if (max - min < 0.2) max = min + 0.2;
+    ctx.beginPath();
+    sparkData.forEach(function (v, i) {
+      var x = (i / (sparkData.length - 1)) * (w - 8) + 4;
+      var y = h - 6 - ((v - min) / (max - min)) * (h - 16);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.strokeStyle = '#34e7ff';
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = '#34e7ff';
+    ctx.shadowBlur = 6;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#7d8ca3';
+    ctx.font = '9px Consolas,monospace';
+    ctx.fillText(max.toFixed(1) + ' МБ', 5, 11);
+    ctx.fillText(min.toFixed(1) + ' МБ', 5, h - 4);
   }
   function updateMemUI() {
     var m = memStats();
@@ -1325,9 +1374,51 @@
       els.heapValue.textContent = m.totalRAM ? m.totalRAM + ' ГБ RAM' : (m.heapMB !== null ? m.heapMB.toFixed(0) + ' МБ' : 'н/д');
       els.heapValue.title = m.totalRAM ? 'Объём оперативной памяти ПК (по данным браузера)' : 'Браузер не отдаёт объём RAM';
     }
+    /* страница «Память» */
+    setText('memRamTotal', m.totalRAM ? m.totalRAM + ' ГБ' : 'н/д');
+    setText('memRamNote', m.totalRAM
+      ? 'общий объём ОЗУ ПК (по данным браузера, округляется до степеней 2)'
+      : 'браузер не сообщает объём RAM');
+    setText('memHeapUsed', m.pageMB !== null ? m.pageMB.toFixed(1) + ' МБ' : 'н/д');
+    setText('memHeapTotal', m.heapMB !== null ? m.heapMB.toFixed(1) + ' МБ' : 'н/д');
+    setText('memHeapLimit', m.limitMB !== null ? (m.limitMB / 1024).toFixed(2) + ' ГБ' : 'н/д');
+    setText('memPageUsed', m.pageMB !== null ? m.pageMB.toFixed(1) + ' МБ' : 'н/д');
+    var heapPct = m.limitMB ? Math.min(100, Math.round((m.pageMB / m.limitMB) * 100)) : 0;
+    setWidth('memHeapBar', heapPct);
+    setText('memHeapNote', m.limitMB
+      ? 'занято ' + heapPct + '% от лимита страницы (' + (m.limitMB / 1024).toFixed(1) + ' ГБ)'
+      : 'JS-heap доступен только в браузерах на Chromium');
+    if (m.pageMB !== null) {
+      sparkData.push(m.pageMB);
+      if (sparkData.length > 60) sparkData.shift();
+      drawSpark();
+    }
+    var lsKB = lsSizeKB();
+    setText('memLs', lsKB !== null ? (lsKB >= 1024 ? (lsKB / 1024).toFixed(2) + ' МБ' : lsKB + ' КБ') : 'н/д');
+    setText('memUpdated', 'замер ' + new Date().toLocaleTimeString());
+  }
+  /* хранилище браузера: сколько место занято сайтом на диске / квота */
+  function updateStorageUI() {
+    if (!navigator.storage || !navigator.storage.estimate) {
+      setText('memStore', 'н/д');
+      setText('memStoreNote', 'браузер не отдаёт квоту хранилища');
+      return;
+    }
+    navigator.storage.estimate().then(function (est) {
+      var used = (est && est.usage) || 0;
+      var quota = (est && est.quota) || 0;
+      var uMB = used / 1048576, qMB = quota / 1048576;
+      setText('memStore', uMB.toFixed(2) + ' МБ');
+      setWidth('memStoreBar', qMB ? (uMB / qMB) * 100 : 0);
+      setText('memStoreNote', qMB
+        ? 'квота браузера: ' + (qMB >= 1024 ? (qMB / 1024).toFixed(1) + ' ГБ' : qMB.toFixed(0) + ' МБ')
+        : 'квота недоступна');
+    }).catch(function () {});
   }
   setInterval(updateMemUI, 3000);
+  setInterval(updateStorageUI, 15000);
   updateMemUI();
+  updateStorageUI();
 
   /* защита контекстного меню на всём документе (даже вне сессии) */
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });

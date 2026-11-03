@@ -77,8 +77,9 @@ window.Monitor = (function () {
     else if (/Chrome\/([\d.]+)/.test(ua)) br = 'Chrome ' + RegExp.$1;
     else if (/Safari\//.test(ua)) br = 'Safari';
 
-    var fine = window.matchMedia('(pointer:fine)').matches;
-    var coarse = window.matchMedia('(pointer:coarse)').matches;
+    var mm = window.matchMedia || function () { return { matches: false }; };
+    var fine = mm('(pointer:fine)').matches;
+    var coarse = mm('(pointer:coarse)').matches;
     var input = fine && coarse ? 'Мышь + тач' : fine ? 'Мышь / трекпад' : coarse ? 'Сенсорный' : '—';
 
     var kind = /Mobi|Android|iPhone/.test(ua) ? 'Телефон' : /iPad|Tablet/.test(ua) ? 'Планшет' : 'Компьютер';
@@ -338,7 +339,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-3.2',
+      version: 'OBZVON-3.3',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,

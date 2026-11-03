@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v3.2 · NAV — боковая панель и подсветка разделов
+   ОБЗВОН v3.3 · NAV — страницы-разделы и боковая панель
    ============================================================ */
 (function () {
   'use strict';
@@ -8,6 +8,7 @@
   var scrim = document.getElementById('sideScrim');
   var btnNav = document.getElementById('btnNav');
   var links = [].slice.call(document.querySelectorAll('.side-nav .nav-link'));
+  var views = [].slice.call(document.querySelectorAll('.page .view'));
 
   /* ---------- мобильная шторка ---------- */
   function setDrawer(open) {
@@ -21,50 +22,75 @@
   });
   if (scrim) scrim.addEventListener('click', function () { setDrawer(false); });
 
-  /* ---------- плавный переход к разделу ---------- */
+  /* ---------- переключение страниц ---------- */
+  var current = 'seance';
+  function showView(name) {
+    var found = false;
+    views.forEach(function (v) {
+      var on = (v.id === 'view-' + name);
+      v.hidden = !on;
+      if (on) found = true;
+    });
+    if (!found) return;
+    var changed = (current !== name);
+    current = name;
+    links.forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-view') === name);
+    });
+    if (changed && window.scrollTo) window.scrollTo(0, 0);
+  }
+
   links.forEach(function (a) {
     a.addEventListener('click', function (e) {
-      var id = (a.getAttribute('href') || '').replace('#', '');
-      var target = id && document.getElementById(id);
-      if (!target) return;
       e.preventDefault();
       setDrawer(false);
-      target.scrollIntoView({ block: 'start' });
-      setActive(id);
+      showView(a.getAttribute('data-view'));
     });
   });
 
-  function setActive(id) {
-    links.forEach(function (a) {
-      a.classList.toggle('active', (a.getAttribute('href') || '') === '#' + id);
-    });
+  /* ---------- при активном испытании — страница «Сеанс» ---------- */
+  function toSeance() {
+    var pf = document.getElementById('playfield');
+    var wasOn = (current === 'seance');
+    showView('seance');
+    if (pf && !pf.hidden && pf.scrollIntoView) {
+      /* если арена не влезает в экран — подскроллить к ней */
+      try {
+        var r = pf.getBoundingClientRect();
+        if (!wasOn || r.top < 4 || r.bottom > (window.innerHeight || 9999)) {
+          pf.scrollIntoView({ block: 'center' });
+        }
+      } catch (e) { try { pf.scrollIntoView({ block: 'center' }); } catch (e2) {} }
+    }
   }
-
-  /* ---------- подсветка текущего раздела при скролле ---------- */
-  var ids = links.map(function (a) { return (a.getAttribute('href') || '').replace('#', ''); })
-                 .filter(Boolean);
-  var targets = ids.map(function (id) { return document.getElementById(id); })
-                   .filter(Boolean);
-
-  if ('IntersectionObserver' in window && targets.length) {
-    var visible = {};
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) { visible[en.target.id] = en.isIntersecting ? en.intersectionRatio : 0; });
-      var best = null, bestR = 0;
-      ids.forEach(function (id) {
-        var r = visible[id] || 0;
-        if (r > bestR) { bestR = r; best = id; }
-      });
-      if (best) setActive(best);
-    }, { threshold: [0, 0.15, 0.4, 0.75], rootMargin: '-70px 0px -45% 0px' });
-    targets.forEach(function (el) { io.observe(el); });
-  }
-
-  /* ---------- при активном испытании подсветка «Испытания» ---------- */
   var playfield = document.getElementById('playfield');
   if (playfield && 'MutationObserver' in window) {
     new MutationObserver(function () {
-      if (!playfield.hidden) setActive('gate');
+      if (!playfield.hidden) toSeance();
     }).observe(playfield, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
+  /* ---------- гейт калибровки тоже живёт на странице «Сеанс» ---------- */
+  var gate = document.getElementById('gate');
+  if (gate && 'MutationObserver' in window) {
+    new MutationObserver(function () {
+      if (!gate.hidden) toSeance();
+    }).observe(gate, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
+  /* ---------- новое испытание: вернуть на «Сеанс», где бы ни были ---------- */
+  var chTask = document.getElementById('chTask');
+  if (chTask && playfield && 'MutationObserver' in window) {
+    new MutationObserver(function () {
+      if (!playfield.hidden) toSeance();
+    }).observe(chTask, { childList: true, characterData: true, subtree: true });
+  }
+
+  /* ---------- итог сессии — страница «Результаты» ---------- */
+  var sum = document.getElementById('sumOverlay');
+  if (sum && 'MutationObserver' in window) {
+    new MutationObserver(function () {
+      if (!sum.hidden) showView('results');
+    }).observe(sum, { attributes: true, attributeFilter: ['hidden'] });
   }
 })();
