@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.3 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v4.4 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '4.3',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '4.4',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -2267,4 +2267,15 @@
   restoreState();
   updateWatermark();
   noteAppliedVersion(CONFIG.appVersion);
+  /* экземпляр поднялся — значит обновление уже применено: баннер закрываем */
+  if (els.updBanner) els.updBanner.hidden = true;
+  if (els.verBadge) els.verBadge.classList.remove('has-update');
+  /* смена версии попадает в журнал событий */
+  var appliedList = appliedUpdates();
+  if (appliedList.length > 1) {
+    var prevV = appliedList[appliedList.length - 2];
+    if (prevV && prevV.v !== CONFIG.appVersion) {
+      feedAdd({ time: ts(), label: 'Применено обновление: v' + prevV.v + ' → v' + CONFIG.appVersion, sev: 0 });
+    }
+  }
 })();
