@@ -24,7 +24,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '3.7',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '3.8',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -119,8 +119,9 @@
    'gate','gateText','btnCalibrate','calibStatus','playfield','chRound','chBar','chTask','arena','chTarget',
    'signalList','feedCount','pauseOverlay','btnResume','lockOverlay','lockTitle','lockText','unlockInput',
    'btnUnlock','sumOverlay','sumTag','sumVerdict','sumTable','btnSumReport','btnSumClose','toast','stroopRow',
-   'totalConc','concTrend','errBanner','selCalib','statTable','chTableBody','chStat','partPanel','chPad',
-   'btnPauseSelf','btnEndSelf','achRow','sessionStart','memValue','memBar','heapValue']
+   'totalConc','concTrend','errBanner','selCalib','statTable','chTable','chTableBody','chStat','partPanel','chPad',
+   'btnPauseSelf','btnEndSelf','achRow','sessionStart','memValue','memBar','heapValue',
+   'btnExportStats','btnImportStats','importFile','wmLayer']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- состояние ---------- */
@@ -189,6 +190,20 @@
     els.toast.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { els.toast.hidden = true; }, ms || 3200);
+  }
+
+  /* ---------- водяной знак с ID сессии (v3.8) ----------
+     Мелкий повторяющийся текст на фоне страницы: любой снимок экрана
+     сразу показывает, к какой сессии он относится. */
+  function updateWatermark() {
+    if (!els.wmLayer) return;
+    var active = ['running', 'paused', 'locked'].indexOf(ST.state) >= 0 && ST.sessionId;
+    if (!active) { els.wmLayer.textContent = ''; els.wmLayer.classList.remove('on'); return; }
+    var line = 'ОБЗВОН · ' + ST.sessionId + '   ';
+    var txt = '';
+    for (var i = 0; i < 60; i++) txt += line;
+    els.wmLayer.textContent = txt;
+    els.wmLayer.classList.add('on');
   }
 
   /* ---------- журнал ---------- */
@@ -269,6 +284,44 @@
   };
   var CH_LOG = [];   /* журнал испытаний: {n,kind,calib,ok,ms,note,time} */
 
+  /* ---------- сортировка таблиц (v3.8) ---------- */
+  var statSort = { key: null, dir: 1 };   /* 'label' | 'value' */
+  var chSort = { key: 'n', dir: 1 };      /* 'n' | 'kind' | 'ok' | 'ms' */
+
+  function thCls(state, key) {
+    if (state.key !== key) return '';
+    return state.dir > 0 ? 'sorted asc' : 'sorted desc';
+  }
+  function statNum(v) {
+    var m = String(v).replace(/\s/g, '').match(/-?\d+(\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  }
+  function sortStatRows(rows) {
+    if (!statSort.key || rows.length < 2) return rows;
+    var key = statSort.key, dir = statSort.dir;
+    return rows.slice().sort(function (a, b) {
+      if (key === 'label') return dir * String(a[0]).localeCompare(String(b[0]), 'ru');
+      var x = statNum(a[1]), y = statNum(b[1]);
+      if (x === null && y === null) return 0;
+      if (x === null) return 1;    /* «—» всегда в конце */
+      if (y === null) return -1;
+      return dir * (x - y);
+    });
+  }
+  function sortChLog() {
+    var log = CH_LOG.slice();
+    var key = chSort.key, dir = chSort.dir;
+    if (!key) return log;
+    return log.sort(function (a, b) {
+      var r = 0;
+      if (key === 'n') r = a.n - b.n;
+      else if (key === 'kind') r = String(KIND_NAMES[a.kind] || '').localeCompare(String(KIND_NAMES[b.kind] || ''), 'ru');
+      else if (key === 'ok') r = (a.ok ? 1 : 0) - (b.ok ? 1 : 0);
+      else if (key === 'ms') r = (a.ms || -1) - (b.ms || -1);
+      return dir * r;
+    });
+  }
+
   function updateTables() {
     if (!els.statTable) return;
     var S = Monitor.state;
@@ -293,17 +346,32 @@
     if (!inS && !CH_LOG.length) {
       rows = [['—', 'данные появятся после калибровки и обзвона']];
     }
-    els.statTable.innerHTML = rows.map(function (r) {
-      return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(String(r[1])) + '</td></tr>';
-    }).join('');
+    rows = sortStatRows(rows);
+    els.statTable.innerHTML =
+      '<thead><tr>' +
+        '<th data-sort="label" class="' + thCls(statSort, 'label') + '">ПОКАЗАТЕЛЬ</th>' +
+        '<th data-sort="value" class="' + thCls(statSort, 'value') + '">ЗНАЧЕНИЕ</th>' +
+      '</tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(String(r[1])) + '</td></tr>';
+      }).join('') + '</tbody>';
+
+    /* индикаторы сортировки на статичном thead журнала испытаний */
+    if (els.chTable) {
+      var ths = els.chTable.querySelectorAll('th[data-sort]');
+      for (var i = 0; i < ths.length; i++) {
+        ths[i].className = thCls(chSort, ths[i].getAttribute('data-sort'));
+      }
+    }
 
     if (!CH_LOG.length) {
       els.chTableBody.innerHTML = '<tr class="ch-empty"><td colspan="4">испытаний не было</td></tr>';
       els.chStat.textContent = '';
       return;
     }
+    var log = sortChLog();
     var okN = 0, sumMs = 0, msN = 0;
-    els.chTableBody.innerHTML = CH_LOG.map(function (r) {
+    els.chTableBody.innerHTML = log.map(function (r) {
       if (r.ok) { okN++; if (r.ms) { sumMs += r.ms; msN++; } }
       return '<tr class="' + (r.ok ? 'ok' : 'bad') + '">' +
         '<td class="num">' + r.n + '</td>' +
@@ -314,6 +382,20 @@
     var avgMs = msN ? Math.round(sumMs / msN) : null;
     els.chStat.textContent = CH_LOG.length + ' испыт. · верно ' + okN +
       ' · ср. реакция ' + (avgMs === null ? '—' : avgMs + ' мс');
+  }
+
+  /* делегирование кликов по заголовкам столбцов */
+  function bindSort(table, state, after) {
+    if (!table) return;
+    table.addEventListener('click', function (e) {
+      var t = e.target;
+      var th = t && t.closest ? t.closest('th[data-sort]') : null;
+      if (!th || !table.contains(th)) return;
+      var key = th.getAttribute('data-sort');
+      if (state.key === key) state.dir = -state.dir;
+      else { state.key = key; state.dir = 1; }
+      after();
+    });
   }
 
   function logChallenge(ok, ms, note) {
@@ -687,6 +769,7 @@
     els.sessionId.textContent = 'сессия ' + ST.sessionId;
     els.sessionStart.textContent = 'старт ' + fmtClock(ST.sessionStartAt);
     setBadge('идёт', 'badge-run');
+    updateWatermark();
     /* база реакции — результат калибровки (хранится отдельно, переживает итоги) */
     var base = ST.baseReaction || Monitor.avgReaction();
     if (base) Monitor.setBaseline(base);
@@ -770,6 +853,7 @@
     if (ST.state === 'running') ST.startedAt += Date.now() - ST.runSince;  /* итоговая длительность */
     ST.state = 'ended';
     Monitor.setRunning(false);
+    updateWatermark();
     clearChTimers(); CH.active = false; Monitor.setChallengeActive(false);
     els.pauseOverlay.hidden = true; els.lockOverlay.hidden = true;
     setBadge('завершён', 'badge-end');
@@ -849,6 +933,7 @@
     FEED = [];
     els.signalList.innerHTML = '<li class="feed-empty">событий нет</li>';
     els.feedCount.textContent = '0';
+    updateWatermark();
     updateMetrics();
     toast('Сессия сброшена', 'good');
   }
@@ -1071,6 +1156,7 @@
     els.sessionId.textContent = 'сессия ' + ST.sessionId;
     els.sessionStart.textContent = ST.sessionStartAt ? 'старт ' + fmtClock(ST.sessionStartAt) + ' (восстановлена)' : 'старт — неизвестен';
     setBadge('идёт', 'badge-run');
+    updateWatermark();
     els.gate.hidden = true; els.playfield.hidden = false; els.partPanel.hidden = false;
     els.btnPauseSelf.textContent = '⏸ Пауза';
     els.btnStart.disabled = true; els.btnPause.disabled = false; els.btnEnd.disabled = false;
@@ -1110,6 +1196,70 @@
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
+
+  /* ---------- экспорт / импорт статистики (v3.8) ---------- */
+  function exportStats() {
+    var tot = loadTotals();
+    var data = {
+      app: 'obzvon-stats',
+      v: CONFIG.appVersion,
+      exportedAt: new Date().toISOString(),
+      totals: {
+        sessions: tot.sessions || 0,
+        avg: tot.avg || 0,
+        prevAvg: (tot.prevAvg === undefined ? null : tot.prevAvg),
+        hist: (tot.hist || []).slice(),
+        last: (tot.last === undefined ? null : tot.last),
+        ach: tot.ach || {}
+      }
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'obzvon-stats-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('Статистика экспортирована в JSON', 'good');
+  }
+
+  function importStats(file) {
+    if (!file) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      var d = null;
+      try { d = JSON.parse(String(fr.result)); } catch (e) { d = null; }
+      var t = d && (d.app === 'obzvon-stats' ? d.totals : null);
+      if (!t || typeof t !== 'object' || typeof t.sessions !== 'number') {
+        toast('Файл не похож на экспорт статистики ОБЗВОН', 'bad');
+        return;
+      }
+      var hist = Array.isArray(t.hist) ? t.hist.filter(function (v) { return typeof v === 'number'; }).slice(-20) : [];
+      var avg = typeof t.avg === 'number' ? t.avg :
+        (hist.length ? Math.round(hist.reduce(function (a, b) { return a + b; }, 0) / hist.length) : 0);
+      var ach = (t.ach && typeof t.ach === 'object') ? t.ach : {};
+      saveTotals({
+        sessions: Math.max(0, t.sessions | 0),
+        avg: avg,
+        prevAvg: (t.prevAvg === undefined ? null : t.prevAvg),
+        hist: hist,
+        last: (typeof t.last === 'number' ? t.last : null),
+        ach: ach
+      });
+      updateTotalConcUI();
+      toast('Статистика импортирована: обзвонов — ' + (loadTotals().sessions || 0), 'good');
+      feedAdd({ time: ts(), label: 'Импорт статистики из JSON', sev: 0 });
+    };
+    fr.onerror = function () { toast('Не удалось прочитать файл', 'bad'); };
+    fr.readAsText(file);
+  }
+
+  if (els.btnExportStats) els.btnExportStats.addEventListener('click', exportStats);
+  if (els.btnImportStats) els.btnImportStats.addEventListener('click', function () { els.importFile.click(); });
+  if (els.importFile) els.importFile.addEventListener('change', function () {
+    var f = els.importFile.files && els.importFile.files[0];
+    importStats(f);
+    els.importFile.value = '';
+  });
 
   /* ============================================================
      ПУЛЬТ КУРАТОРА
@@ -1191,6 +1341,10 @@
   els.btnSumClose.addEventListener('click', function () { els.sumOverlay.hidden = true; resetAll(); });
   els.btnReset.addEventListener('click', resetAll);
   els.selThreshold.addEventListener('change', function () { ST.threshold = parseInt(els.selThreshold.value, 10); });
+
+  /* сортировка таблиц результатов (v3.8) */
+  bindSort(els.statTable, statSort, updateTables);
+  bindSort(els.chTable, chSort, updateTables);
 
   /* сложность калибровки: 6 / 10 / 20 / 50 / 100 заданий */
   function syncCalibBtn() {
@@ -1478,7 +1632,37 @@
   }
   setTimeout(checkUpdates, 5000);
 
+  /* ---------- проверка целостности кода (v3.8) ----------
+     Контрольная сумма ключевых функций снимается при загрузке и
+     периодически сверяется: при расхождении — штраф и предупреждение. */
+  function codeFingerprint() {
+    try {
+      return sha256hex([
+        sha256hex.toString(),
+        passMatch.toString(),
+        startSession.toString(),
+        endChallenge.toString(),
+        Monitor.penalty ? Monitor.penalty.toString() : ''
+      ].join('|'));
+    } catch (e) { return ''; }
+  }
+  var codeBase = null;
+  function codeGuard() {
+    var fp = codeFingerprint();
+    if (!fp) return;
+    if (codeBase === null) { codeBase = fp; return; }
+    if (fp !== codeBase) {
+      codeBase = fp;
+      Monitor.penalty('Вмешательство в код', 6, 3);
+      toast('Обнаружено вмешательство в код страницы', 'bad', 6000);
+      feedAdd({ time: ts(), label: 'Проверка целостности кода: несовпадение', sev: 2 });
+    }
+  }
+  codeGuard();
+  setInterval(codeGuard, 30000);
+
   updateMetrics();
   updateTotalConcUI();
   restoreState();
+  updateWatermark();
 })();

@@ -10,7 +10,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=3.7" />
+  <link rel="stylesheet" href="css/styles.css?v=3.8" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -36,7 +36,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub">ВЕРСИЯ 3.7</div>
+          <div class="hero-sub">ВЕРСИЯ 3.8</div>
         </div>
       </div>
 
@@ -48,6 +48,7 @@
         <a class="nav-link" href="#view-results" data-view="results"><i>📊</i><span>Результаты</span></a>
         <a class="nav-link" href="#view-feed" data-view="feed"><i>📜</i><span>Журнал</span></a>
         <a class="nav-link" href="#view-news" data-view="news"><i>📣</i><span>Новости</span></a>
+        <a class="nav-link" href="#view-help" data-view="help"><i>❓</i><span>Справка</span></a>
       </nav>
 
       <div class="side-foot">
@@ -269,12 +270,25 @@
         <div class="view" id="view-results" hidden>
           <section class="panel stats-panel" id="statsPanel">
             <div class="panel-head"><span class="panel-title">ТАБЛИЦА РЕЗУЛЬТАТОВ</span><span class="panel-hint" id="chStat"></span></div>
-            <div class="panel-body stats-body">
-              <table class="stat-table" id="statTable"></table>
-              <table class="ch-table" id="chTable">
-                <thead><tr><th>№</th><th>ВИД</th><th>ИТОГ</th><th>РЕАКЦИЯ</th></tr></thead>
-                <tbody id="chTableBody"><tr class="ch-empty"><td colspan="4">испытаний не было</td></tr></tbody>
-              </table>
+            <div class="panel-body">
+              <div class="stats-tools">
+                <button type="button" class="btn btn-ghost" id="btnExportStats" title="Скачать статистику в JSON">⬇ Экспорт</button>
+                <button type="button" class="btn btn-ghost" id="btnImportStats" title="Загрузить статистику из JSON">⬆ Импорт</button>
+                <input type="file" id="importFile" accept=".json,application/json" hidden />
+                <span class="stats-tools-hint">столбцы таблиц сортируются по клику</span>
+              </div>
+              <div class="stats-body">
+                <table class="stat-table" id="statTable"></table>
+                <table class="ch-table" id="chTable">
+                  <thead><tr>
+                    <th data-sort="n">№</th>
+                    <th data-sort="kind">ВИД</th>
+                    <th data-sort="ok">ИТОГ</th>
+                    <th data-sort="ms">РЕАКЦИЯ</th>
+                  </tr></thead>
+                  <tbody id="chTableBody"><tr class="ch-empty"><td colspan="4">испытаний не было</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </section>
         </div>
@@ -298,6 +312,17 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v3.8</div>
+                  <div class="news-body">
+                    <h3>Экспорт/импорт статистики, сортировка, «Справка» и защита</h3>
+                    <p>Кнопки экспорта и импорта статистики в «Результатах» — JSON-бэкап
+                       на случай очистки браузера. Таблицы сортируются по клику на заголовок
+                       столбца. Новая страница «Справка»: как проходит обзвон, виды испытаний,
+                       клавиши и советы. Защита: невидимый водяной знак с ID сессии,
+                       проверка целостности кода и новые блокировки сочетаний клавиш.</p>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v3.7</div>
                   <div class="news-body">
                     <h3>Новости разработчика и расширенная графика</h3>
@@ -360,6 +385,80 @@
           </section>
         </div>
 
+        <!-- ===== СТРАНИЦА: СПРАВКА ===== -->
+        <div class="view" id="view-help" hidden>
+          <section class="panel" id="helpPanel">
+            <div class="panel-head"><span class="panel-title">СПРАВКА</span><span class="panel-hint">как проходит обзвон</span></div>
+            <div class="panel-body">
+              <div class="help-grid">
+                <div class="help-card">
+                  <h3>◎ Как проходит обзвон</h3>
+                  <p>Куратор входит в «Пульт», вводит код и запускает обзвон. Сначала —
+                     калибровка (несколько испытаний для настройки темпа), затем сам сеанс:
+                     испытания внимания появляются каждые 10–25 секунд. По завершении
+                     система показывает итог с фишками и отчётом.</p>
+                </div>
+                <div class="help-card">
+                  <h3>🎯 Виды испытаний</h3>
+                  <ul class="help-list">
+                    <li><b>Клавиша</b> — нажмите указанную букву или цифру.</li>
+                    <li><b>Цель</b> — быстро кликните/нажмите на появившуюся цель.</li>
+                    <li><b>Удержание</b> — держите Пробел, пока не прозвучит сигнал.</li>
+                    <li><b>Математика</b> — введите ответ на пример цифрами.</li>
+                    <li><b>Память</b> — повторите показанную последовательность символов.</li>
+                    <li><b>Струп</b> — выберите цвет слова, а не его значение.</li>
+                  </ul>
+                </div>
+                <div class="help-card">
+                  <h3>⌨ Клавиши и ввод</h3>
+                  <ul class="help-list">
+                    <li><b>Пробел</b> — удержание в испытании «Удержание».</li>
+                    <li><b>Буквы/цифры</b> — ответы в остальных испытаниях; работает
+                        и с русской раскладкой.</li>
+                    <li>На телефоне появляется <b>экранная панель</b> — ответ можно
+                        без физической клавиатуры.</li>
+                    <li>Служебные сочетания (DevTools, сохранение страницы и т.п.)
+                        <b>блокируются</b> — это защита обзвона.</li>
+                  </ul>
+                </div>
+                <div class="help-card">
+                  <h3>💡 Советы</h3>
+                  <ul class="help-list">
+                    <li>Не переключайте вкладки и не сворачивайте страницу — это
+                        фиксируется в журнале.</li>
+                    <li>Копирование текста и снимки экрана запрещены.</li>
+                    <li>Смотрите на экран: концентрация падает при простое.</li>
+                    <li>Пауза и завершение — только по согласованию с куратором.</li>
+                  </ul>
+                </div>
+                <div class="help-card">
+                  <h3>📊 Результаты и статистика</h3>
+                  <ul class="help-list">
+                    <li>Страница «Результаты» показывает таблицу метрик и журнал
+                        испытаний — <b>клик по заголовку столбца сортирует</b> её.</li>
+                    <li>Кнопки <b>«Экспорт»</b> и <b>«Импорт»</b> сохраняют
+                        и восстанавливают статистику (JSON-файл) — например,
+                        после очистки браузера.</li>
+                    <li>Общий отчёт сессии скачивается с «Пульта куратора».</li>
+                  </ul>
+                </div>
+                <div class="help-card">
+                  <h3>🛡 Защита обзвона</h3>
+                  <ul class="help-list">
+                    <li>Копирование, перетаскивание и контекстное меню отключены.</li>
+                    <li>Попытки открыть DevTools, перезагрузить или сохранить
+                        страницу блокируются и попадают в журнал.</li>
+                    <li>На фоне страницы — <b>водяной знак с ID сессии</b>: снимок
+                        экрана сразу покажет, чья это сессия.</li>
+                    <li>Система проверяет <b>целостность кода</b> и реагирует
+                        на попытки вмешательства.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
         <footer class="credits">
           <span class="credits-tag">СОЗДАТЕЛИ</span>
           <span class="credits-item">Discord — <b>thewerasa2.0</b></span>
@@ -404,12 +503,13 @@
   </div>
 
   <div class="toast" id="toast" hidden></div>
+  <div class="wm-layer" id="wmLayer" aria-hidden="true"></div>
   <div class="noise" aria-hidden="true"></div>
 
-  <script src="js/fx.js?v=3.7"></script>
-  <script src="js/monitor.js?v=3.7"></script>
-  <script src="js/nav.js?v=3.7"></script>
-  <script src="js/app.js?v=3.7"></script>
+  <script src="js/fx.js?v=3.8"></script>
+  <script src="js/monitor.js?v=3.8"></script>
+  <script src="js/nav.js?v=3.8"></script>
+  <script src="js/app.js?v=3.8"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

@@ -108,10 +108,14 @@ window.Monitor = (function () {
   /* ---------------- keyboard / clipboard shield ---------------- */
   var COMBO_NAMES = {
     KeyI: 'DevTools (Ctrl+Shift+I)', KeyC: 'DevTools (Ctrl+Shift+C)', KeyJ: 'Консоль (Ctrl+Shift+J)',
-    KeyU: 'Исходник страницы (Ctrl+U)', KeyP: 'Печать (Ctrl+P)', KeyS: 'Сохранение страницы (Ctrl+S)'
+    KeyU: 'Исходник страницы (Ctrl+U)', KeyP: 'Печать (Ctrl+P)', KeyS: 'Сохранение страницы (Ctrl+S)',
+    KeyF: 'Поиск на странице (Ctrl+F)', KeyG: 'Поиск далее (Ctrl+G)', KeyH: 'История (Ctrl+H)',
+    KeyL: 'Адресная строка (Ctrl+L)', KeyD: 'Закладка (Ctrl+D)', KeyO: 'Открытие файла (Ctrl+O)',
+    KeyB: 'Панель закладок (Ctrl+Shift+B)', KeyV: 'Вставка без форматирования (Ctrl+Shift+V)',
+    KeyN: 'Новое окно (Ctrl+Shift+N)', KeyE: 'Поиск в интернете (Ctrl+E)'
   };
-  var BLOCK_CTRL = ['KeyU', 'KeyP', 'KeyS', 'KeyO'];
-  var BLOCK_CTRL_SHIFT = ['KeyI', 'KeyC', 'KeyJ', 'KeyN'];
+  var BLOCK_CTRL = ['KeyU', 'KeyP', 'KeyS', 'KeyO', 'KeyF', 'KeyG', 'KeyH', 'KeyL', 'KeyD', 'KeyE'];
+  var BLOCK_CTRL_SHIFT = ['KeyI', 'KeyC', 'KeyJ', 'KeyN', 'KeyB', 'KeyV'];
 
   function onKey(e) {
     S.lastActivity = now();
@@ -339,7 +343,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-3.7',
+      version: 'OBZVON-3.8',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,
