@@ -713,7 +713,7 @@ h1 span{background-image:linear-gradient(90deg,var(--acc),var(--acc3),var(--vio)
 }
 
 /* ============================================================
-   ОБЗВОН v3.5 · СТРАНИЦЫ-РАЗДЕЛЫ И ПАНЕЛЬ ПАМЯТИ
+   ОБЗВОН v3.6 · СТРАНИЦЫ-РАЗДЕЛЫ И ПАНЕЛЬ ПАМЯТИ
    ============================================================ */
 
 /* ---------- вкладка-страница ---------- */
@@ -761,3 +761,36 @@ h1 span{background-image:linear-gradient(90deg,var(--acc),var(--acc3),var(--vio)
 @keyframes feedHit{
   0%{box-shadow:inset 0 0 20px rgba(255,77,109,.4);transform:translateX(-5px)}
   100%{box-shadow:none;transform:none}}
+
+/* ============================================================
+   ОБЗВОН v3.6 · АНИМИРОВАННЫЙ ГРАДИЕНТ-ФОН (МЕШ-ПЯТНА)
+   Плавно перетекающие неоновые пятна поверх звёзд:
+   только transform-анимации (композитор), без перерисовки.
+   ============================================================ */
+.bg-blobs{position:absolute;inset:0;pointer-events:none;
+  mix-blend-mode:screen;opacity:.5}
+.bg-blobs span{position:absolute;display:block;will-change:transform}
+.bg-blobs .b1{width:54vw;height:54vw;top:-16%;left:-12%;
+  border-radius:62% 38% 54% 46%;
+  background:radial-gradient(circle at 40% 36%,rgba(255,47,185,.55),rgba(255,47,185,0) 66%);
+  animation:blobDriftA 27s ease-in-out infinite alternate}
+.bg-blobs .b2{width:50vw;height:50vw;bottom:-18%;right:-12%;
+  border-radius:40% 60% 44% 56%;
+  background:radial-gradient(circle at 58% 44%,rgba(52,231,255,.5),rgba(52,231,255,0) 66%);
+  animation:blobDriftB 31s ease-in-out infinite alternate}
+.bg-blobs .b3{width:44vw;height:44vw;top:34%;left:42%;
+  border-radius:54% 46% 38% 62%;
+  background:radial-gradient(circle at 50% 50%,rgba(139,92,246,.52),rgba(139,92,246,0) 66%);
+  animation:blobDriftA 35s ease-in-out infinite alternate-reverse}
+.bg-blobs .b4{width:34vw;height:34vw;top:62%;left:8%;
+  border-radius:48% 52% 60% 40%;
+  background:radial-gradient(circle at 46% 42%,rgba(157,255,91,.34),rgba(157,255,91,0) 66%);
+  animation:blobDriftB 39s ease-in-out infinite alternate-reverse}
+@keyframes blobDriftA{
+  0%{transform:translate3d(0,0,0) rotate(0) scale(1)}
+  50%{transform:translate3d(6vw,-5vh,0) rotate(150deg) scale(1.15)}
+  100%{transform:translate3d(-5vw,7vh,0) rotate(310deg) scale(.95)}}
+@keyframes blobDriftB{
+  0%{transform:translate3d(0,0,0) rotate(40deg) scale(1.05)}
+  50%{transform:translate3d(-7vw,6vh,0) rotate(200deg) scale(.92)}
+  100%{transform:translate3d(5vw,-6vh,0) rotate(360deg) scale(1.12)}}
