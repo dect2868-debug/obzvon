@@ -507,6 +507,33 @@ window.Monitor = (function () {
     patchGetDisplayMedia();
   }
 
+  /* полная остановка монитора — нужна для чистого перезапуска системы (v4.1) */
+  function stop() {
+    clearInterval(S._t); clearInterval(S._f);
+    clearInterval(S._tab); clearInterval(S._clk); clearInterval(S._dbg);
+    S._t = S._f = S._tab = S._clk = S._dbg = null;
+    if (S._attached) {
+      S._attached = false;
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('contextmenu', onCopyBlock);
+      document.removeEventListener('copy', onCopyBlock);
+      document.removeEventListener('cut', onCopyBlock);
+      document.removeEventListener('selectstart', onCopyBlock);
+      document.removeEventListener('dragstart', onCopyBlock);
+      document.removeEventListener('beforeprint', onPrint);
+      document.removeEventListener('mousemove', onActivity);
+      document.removeEventListener('pointerdown', onActivity);
+      document.removeEventListener('touchstart', onActivity);
+      document.removeEventListener('wheel', onActivity);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('beforeunload', onBlur);
+    }
+    S.running = false;
+    return true;
+  }
+
   /* перезапуск монитора, если его таймеры зависли (самопочинка v4.1) */
   function restart() {
     armTimers();
@@ -620,7 +647,7 @@ window.Monitor = (function () {
     detect: detect, report: report, reset: reset, cheatPercent: cheatPercent,
     concentration: concentration, focusRatio: focusRatio, avgReaction: avgReaction,
     penalty: penalty, setBaseline: setBaseline,
-    restart: restart, lastTickAt: lastTickAt,
+    restart: restart, stop: stop, lastTickAt: lastTickAt,
     /* защита v4.0 — наружу, чтобы проверки можно было запускать из тестов */
     guards: {
       detectAutomation: detectAutomation,

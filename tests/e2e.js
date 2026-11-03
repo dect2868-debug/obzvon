@@ -450,6 +450,25 @@ s.test('диагностика не даёт ложных срабатывани
   t.close();
 });
 
+s.test('модули освобождают ресурсы — система умеет перезапускаться', async () => {
+  const t = boot({ pass: 'test-pass' });
+  await sleep(120);
+  assert(typeof t.win.Monitor.stop === 'function', 'нет Monitor.stop()');
+  assert(typeof t.win.FX.stop === 'function', 'нет FX.stop()');
+  assert(typeof t.win.Health.stop === 'function', 'нет Health.stop()');
+  assert(typeof t.win.OBZ.restart === 'function', 'нет OBZ.restart()');
+
+  const before = t.win.Monitor.lastTickAt();
+  await sleep(1300);
+  const after = t.win.Monitor.lastTickAt();
+  assert(after > before, 'пульс монитора не тикает');
+
+  t.win.Monitor.stop();
+  await sleep(1300);
+  eq(t.win.Monitor.lastTickAt(), after, 'после остановки пульс должен прекратиться');
+  t.close();
+});
+
 module.exports = s;
 
 if (require.main === module) {

@@ -140,7 +140,7 @@
     'archCards','archChart','archCompare','archTable','archCount',
     'btnArchCsv','btnArchClear',
     'healthGrid','healthScore','healthRepair','healthLog',
-    'btnHealthCheck','btnHealthRepair','btnHealthReport','btnHealthClear']
+    'btnHealthCheck','btnHealthRepair','btnHealthReport','btnHealthClear','btnHealthRestart']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- состояние ---------- */
@@ -1978,7 +1978,17 @@
       }
       return acts.join('; ');
     },
-    watchdog: function () { return { checks: watchdog.checks, repairs: watchdog.repairs, last: watchdog.lastRepair }; }
+    watchdog: function () { return { checks: watchdog.checks, repairs: watchdog.repairs, last: watchdog.lastRepair }; },
+    /* перезапуск системы: освобождаем ресурсы и поднимаемся заново (v4.1) */
+    restart: function () {
+      try { saveState(); } catch (e) {}
+      try { if (window.Monitor && Monitor.stop) Monitor.stop(); } catch (e2) {}
+      try { if (window.Live && Live.stop) Live.stop(); } catch (e3) {}
+      try { if (window.FX && FX.stop) FX.stop(); } catch (e4) {}
+      try { if (window.Health && Health.stop) Health.stop(); } catch (e5) {}
+      try { location.reload(); } catch (e6) {}
+      return true;
+    }
   };
 
   updateMetrics();

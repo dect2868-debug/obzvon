@@ -258,7 +258,7 @@
     flashLife = 1;
   }
 
-  window.FX = { pulse: pulse, flash: flash };
+  window.FX = { pulse: pulse, flash: flash, stop: stop, start: start };
 
   function start() {
     if (reduce) { drawStatic(); return; }

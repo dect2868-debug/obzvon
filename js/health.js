@@ -331,6 +331,11 @@
     });
     var btnReport = el('btnHealthReport');
     if (btnReport) btnReport.addEventListener('click', downloadReport);
+    var btnRestart = el('btnHealthRestart');
+    if (btnRestart) btnRestart.addEventListener('click', function () {
+      log('info', 'Запрошен перезапуск системы');
+      if (window.OBZ && OBZ.restart) OBZ.restart();
+    });
     var btnClear = el('btnHealthClear');
     if (btnClear) btnClear.addEventListener('click', function () {
       errors = [];
@@ -340,11 +345,13 @@
     renderLog();
   }
 
+  var autoTimer = null;
+
   function init() {
     bind();
     check();
     /* автопроверка каждые 30 с — страница сама следит за собой */
-    setInterval(function () {
+    autoTimer = setInterval(function () {
       var res = check();
       if (res.score < 100) {
         var broken = res.checks.filter(function (c) { return !c.ok; });
@@ -358,8 +365,13 @@
     }, 30000);
   }
 
+  function stop() {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    return true;
+  }
+
   window.Health = {
-    init: init, check: check, repair: repair, log: log, report: report,
+    init: init, check: check, repair: repair, log: log, report: report, stop: stop,
     errors: function () { return errors.slice(); },
     last: function () { return lastResult; },
     downloadReport: downloadReport
