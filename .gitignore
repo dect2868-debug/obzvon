@@ -1,0 +1,49 @@
+# локальные исключения (глобальный .gitignore игнорирует css/ и js/ — здесь возвращаем)
+!css/
+!js/
+
+# ---- СЕКРЕТЫ: никогда не публикуются на GitHub ----
+# пароль/код куратора
+пароль-куратора.txt
+пароль*
+*пароль*
+pass*
+password*
+*.pass
+
+# ключи, сертификаты, токены, env
+*.key
+*.pem
+*.pfx
+*.p12
+*.crt
+*.cer
+*.jks
+*.keystore
+.env
+.env.*
+*.env
+secrets*
+secret.*
+token*
+*.token
+credentials*
+*.credentials
+config.local.*
+local.settings.*
+
+# резервные/рабочие копии, которые могут содержать старый код или пароли
+*.bak
+*.backup
+*.old
+*.orig
+*.swp
+*~
+*.tmp
+*.log
+.vscode/
+.idea/
+
+# git
+.DS_Store
+Thumbs.db
