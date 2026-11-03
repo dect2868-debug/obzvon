@@ -1,0 +1,16 @@
+{
+  "name": "obzvon",
+  "version": "4.0.0",
+  "private": true,
+  "description": "ОБЗВОН — система обзвона с проверкой внимательности (статика, без базы данных)",
+  "scripts": {
+    "test": "node tests/run.js",
+    "smoke": "node tests/smoke.js",
+    "e2e": "node tests/e2e.js",
+    "security": "node tests/security.js",
+    "load": "node tests/load.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.0"
+  }
+}

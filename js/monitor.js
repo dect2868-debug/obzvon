@@ -1,5 +1,8 @@
 /* ============================================================
-   ОБЗВОН v2 :: MONITOR  (детект нарушений + система кандидата)
+   ОБЗВОН v4.0 :: MONITOR  (детект нарушений + система кандидата)
+   v4.0: авто-тесты браузера, захват экрана (WebRTC), вторая
+   вкладка, подмена часов, пауза-отладчик, расширенный список
+   блокируемых сочетаний.
    ============================================================ */
 window.Monitor = (function () {
   'use strict';
@@ -30,7 +33,13 @@ window.Monitor = (function () {
     challengeActive: false,
     baseDw: null,
     baseDh: null,
-    baseline: null
+    baseline: null,
+    automation: false,     /* автотесты / бот / удалённая отладка */
+    webrtc: false,         /* захват экрана */
+    secondTab: false,      /* страница открыта во второй вкладке */
+    clockTamper: false,    /* подмена системных часов */
+    blockedPrint: 0,
+    tabId: null
   };
 
   var cfg = {
@@ -53,6 +62,9 @@ window.Monitor = (function () {
     if (!S.running) return;
     S.score = Math.min(150, S.score + weight);
     S.viol.push({ t: now(), type: type, label: label, weight: weight });
+    /* журнал нарушений ограничен — иначе при «флуде» событий страница
+       раздувается и localStorage переполняется (v4.0) */
+    if (S.viol.length > 500) S.viol.shift();
     if (cb.violation) cb.violation({ type: type, label: label, weight: weight, sev: sev || (weight >= 6 ? 2 : 1), time: hms(now()) });
   }
 
@@ -105,6 +117,162 @@ window.Monitor = (function () {
             window.devicePixelRatio].join('|');
   }
 
+  /* ============================================================
+     ЗАЩИТА v4.0 — расширенный набор детектов
+     ============================================================ */
+
+  /* маркеры автотестов и удалённой отладки */
+  var AUTO_MARKERS = [
+    '__playwright__', '__pw_manual', '__PW_inspect', '__playwright_target__',
+    '__puppeteer_evaluation_script__', '__PUPPETEER__', '__puppeteer_evaluation_script__',
+    '__selenium_unwrapped', '__selenium_evaluate', '__webdriver_evaluate',
+    '__webdriver_script_fn', '__webdriver_script_func', '__driver_evaluate',
+    '__nightmare', '_phantom', 'callPhantom', 'phantom',
+    'domAutomation', 'domAutomationController', 'domAutomationBackend',
+    'cdc_adoQpoasnfa76pfcZLmcfl_Array', 'cdc_adoQpoasnfa76pfcZLmcfl_JSON',
+    'cdc_adoQpoasnfa76pfcZLmcfl_Object', '__selenium_evaluate'
+  ];
+
+  function detectAutomation() {
+    if (S.automation) return true;
+    var found = '';
+    for (var i = 0; i < AUTO_MARKERS.length; i++) {
+      var k = AUTO_MARKERS[i];
+      try {
+        if (k in window) { found = k; break; }
+        if (window[k] !== undefined) { found = k; break; }
+      } catch (e) {}
+    }
+    if (!found && navigator.webdriver === true) found = 'navigator.webdriver';
+    if (!found) {
+      try {
+        if (navigator.plugins && navigator.plugins.length === 0 &&
+            /HeadlessChrome/i.test(navigator.userAgent || '')) found = 'HeadlessChrome';
+      } catch (e) {}
+    }
+    if (found) {
+      S.automation = true;
+      emit('automation', 'Обнаружена авто-тест/бот-окружение (' + found + ')', 18, 2);
+      return true;
+    }
+    return false;
+  }
+
+  /* подмена встроенных функций (типичный приём обхода защиты) */
+  function checkNative() {
+    try {
+      var t = Function.prototype.toString.toString();
+      if (t.indexOf('[native code]') < 0) {
+        S.automation = true;
+        emit('automation', 'Встроенные функции переопределены (подмена кода)', 16, 2);
+        return true;
+      }
+    } catch (e) {}
+    try {
+      var d = Object.getOwnPropertyDescriptor && Object.getOwnPropertyDescriptor(Date, 'now');
+      if (d && d.value && String(d.value).indexOf('[native code]') < 0) {
+        S.clockTamper = true;
+        emit('clock', 'Функция Date.now переопределена', 14, 2);
+        return true;
+      }
+    } catch (e2) {}
+    return false;
+  }
+
+  /* перехват захвата экрана через WebRTC */
+  function patchGetDisplayMedia() {
+    try {
+      var md = navigator.mediaDevices;
+      if (!md || typeof md.getDisplayMedia !== 'function') return;
+      if (md.__obzPatched) return;
+      var orig = md.getDisplayMedia.bind(md);
+      md.getDisplayMedia = function () {
+        S.webrtc = true;
+        emit('webrtc', 'Захват экрана через WebRTC (getDisplayMedia)', 15, 2);
+        return orig.apply(md, arguments);
+      };
+      try { md.__obzPatched = true; } catch (e2) {}
+    } catch (e) {}
+  }
+
+  /* вторая вкладка с этой страницей — участник мог смотреть в один экран,
+     а отвечать в другом. Каждая вкладка пишет свой пульс в localStorage. */
+  var TAB_PREFIX = 'obzvon_v2_tab_';
+  function tabHeartbeat() {
+    if (!S.tabId) {
+      S.tabId = 'T' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    }
+    var nowTs = Date.now();
+    try { localStorage.setItem(TAB_PREFIX + S.tabId, String(nowTs)); } catch (e) {}
+    /* чистим мёртвые вкладки старше 30 с */
+    try {
+      var kill = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(TAB_PREFIX) === 0) {
+          var ts = parseInt(localStorage.getItem(k), 10) || 0;
+          if (nowTs - ts > 30000) kill.push(k);
+        }
+      }
+      kill.forEach(function (k) { localStorage.removeItem(k); });
+    } catch (e2) {}
+
+    /* ищем живые чужие вкладки */
+    var foreign = 0;
+    try {
+      for (var j = 0; j < localStorage.length; j++) {
+        var kk = localStorage.key(j);
+        if (!kk || kk.indexOf(TAB_PREFIX) !== 0) continue;
+        if (kk === TAB_PREFIX + S.tabId) continue;
+        var t2 = parseInt(localStorage.getItem(kk), 10) || 0;
+        if (nowTs - t2 < 15000) foreign++;
+      }
+    } catch (e3) {}
+    if (foreign > 0 && !S.secondTab) {
+      S.secondTab = true;
+      emit('tab', 'Страница открыта во второй вкладке (' + foreign + ')', 12, 2);
+    }
+  }
+
+  /* подмена системных часов (Date.now врёт, чтобы «отмотать» таймер) */
+  function clockGuard() {
+    if (!S.running) return;
+    var real = -1;
+    try {
+      if (window.performance && typeof window.performance.now === 'function' &&
+          typeof window.performance.timeOrigin === 'number') {
+        real = window.performance.timeOrigin + window.performance.now();
+      }
+    } catch (e) {}
+    if (real > 0) {
+      var drift = Math.abs(real - Date.now());
+      if (drift > 10000 && !S.clockTamper) {
+        S.clockTamper = true;
+        emit('clock', 'Системные часы изменены (расхождение ' + Math.round(drift / 1000) + ' с)', 14, 2);
+      }
+    }
+  }
+
+  /* пауза-отладчик: при открытых DevTools выполнение встаёт на паузу.
+     Два замера подряд и высокий порог — чтобы не было ложных срабатываний
+     при обычной нагрузке (сборка мусора, тяжёлая анимация). */
+  var dbgSlow = 0;
+  function debuggerGuard() {
+    if (!S.running || S.devtools) return;
+    var t0 = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+    try { (function () { debugger; }()); } catch (e) {}
+    var t1 = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+    if (t1 - t0 > 400) {
+      dbgSlow++;
+      if (dbgSlow >= 2) {
+        S.devtools = true;
+        emit('devtools', 'Отладчик активен — выполнение страницы приостановлено', 10, 2);
+      }
+    } else {
+      dbgSlow = 0;
+    }
+  }
+
   /* ---------------- keyboard / clipboard shield ---------------- */
   var COMBO_NAMES = {
     KeyI: 'DevTools (Ctrl+Shift+I)', KeyC: 'DevTools (Ctrl+Shift+C)', KeyJ: 'Консоль (Ctrl+Shift+J)',
@@ -112,10 +280,14 @@ window.Monitor = (function () {
     KeyF: 'Поиск на странице (Ctrl+F)', KeyG: 'Поиск далее (Ctrl+G)', KeyH: 'История (Ctrl+H)',
     KeyL: 'Адресная строка (Ctrl+L)', KeyD: 'Закладка (Ctrl+D)', KeyO: 'Открытие файла (Ctrl+O)',
     KeyB: 'Панель закладок (Ctrl+Shift+B)', KeyV: 'Вставка без форматирования (Ctrl+Shift+V)',
-    KeyN: 'Новое окно (Ctrl+Shift+N)', KeyE: 'Поиск в интернете (Ctrl+E)'
+    KeyN: 'Новое окно (Ctrl+Shift+N)', KeyE: 'Поиск в интернете (Ctrl+E)',
+    KeyT: 'Новая вкладка (Ctrl+T)', KeyW: 'Закрыть вкладку (Ctrl+W)', Tab: 'Переключение вкладок (Ctrl+Tab)',
+    Equal: 'Изменение масштаба (Ctrl++)', Minus: 'Изменение масштаба (Ctrl+-)', Digit0: 'Сброс масштаба (Ctrl+0)'
   };
-  var BLOCK_CTRL = ['KeyU', 'KeyP', 'KeyS', 'KeyO', 'KeyF', 'KeyG', 'KeyH', 'KeyL', 'KeyD', 'KeyE'];
-  var BLOCK_CTRL_SHIFT = ['KeyI', 'KeyC', 'KeyJ', 'KeyN', 'KeyB', 'KeyV'];
+  var BLOCK_CTRL = ['KeyU', 'KeyP', 'KeyS', 'KeyO', 'KeyF', 'KeyG', 'KeyH', 'KeyL', 'KeyD', 'KeyE',
+                    'KeyT', 'KeyW', 'Equal', 'Minus', 'Digit0'];
+  var BLOCK_CTRL_SHIFT = ['KeyI', 'KeyC', 'KeyJ', 'KeyN', 'KeyB', 'KeyV', 'KeyT', 'KeyW'];
+  var BLOCK_TAB = true;   /* Ctrl+Tab / Ctrl+Shift+Tab — переключение вкладок */
 
   function onKey(e) {
     S.lastActivity = now();
@@ -138,6 +310,13 @@ window.Monitor = (function () {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && BLOCK_CTRL.indexOf(e.code) >= 0) {
       block(e); S.blockedKeys++;
       emit('blocked', 'Заблокировано: ' + (COMBO_NAMES[e.code] || e.code), 5);
+      return;
+    }
+
+    /* переключение вкладок: Ctrl+Tab / Ctrl+Shift+Tab */
+    if (BLOCK_TAB && (e.ctrlKey || e.metaKey) && e.code === 'Tab') {
+      block(e); S.blockedKeys++;
+      emit('blocked', 'Заблокировано: ' + (COMBO_NAMES.Tab || 'переключение вкладок'), 6, 2);
       return;
     }
 
@@ -164,6 +343,13 @@ window.Monitor = (function () {
   function block(e) { e.preventDefault(); e.stopPropagation(); }
 
   function onCopyBlock(e) { if (S.running) { block(e); S.copyAttempts++; emit('copy', 'Копирование запрещено', 3); } }
+
+  /* попытка напечатать страницу (Ctrl+P перехватывается, но диалог мог открыться иначе) */
+  function onPrint() {
+    if (!S.running) return;
+    S.blockedPrint++;
+    emit('print', 'Попытка печати страницы', 6, 2);
+  }
 
   function onActivity() { S.lastActivity = now(); }
 
@@ -287,6 +473,7 @@ window.Monitor = (function () {
     document.addEventListener('cut', onCopyBlock);
     document.addEventListener('selectstart', onCopyBlock);
     document.addEventListener('dragstart', onCopyBlock);
+    document.addEventListener('beforeprint', onPrint);
     document.addEventListener('mousemove', onActivity, { passive: true });
     document.addEventListener('pointerdown', onActivity, { passive: true });
     document.addEventListener('touchstart', onActivity, { passive: true });
@@ -298,9 +485,24 @@ window.Monitor = (function () {
 
     S._t = setInterval(tick, cfg.tickInterval);
     S._f = setInterval(fpCheck, cfg.fpInterval);
+    /* защита v4.0: пульс вкладок, часы, отладчик */
+    S._tab = setInterval(tabHeartbeat, 2000);
+    S._clk = setInterval(clockGuard, 5000);
+    S._dbg = setInterval(debuggerGuard, 2500);
+    tabHeartbeat();
+    patchGetDisplayMedia();
   }
 
-  function setRunning(v) { S.running = !!v; if (v) S.lastActivity = now(); }
+  function setRunning(v) {
+    S.running = !!v;
+    if (v) {
+      S.lastActivity = now();
+      /* проверки запускаются в момент старта сессии, чтобы нарушение попало в журнал */
+      detectAutomation();
+      checkNative();
+      patchGetDisplayMedia();
+    }
+  }
 
   function setChallengeActive(v) { S.challengeActive = !!v; if (v) S.lastActivity = now(); }
 
@@ -343,7 +545,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-3.8',
+      version: 'OBZVON-4.0',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,
@@ -361,7 +563,12 @@ window.Monitor = (function () {
         reloadTries: S.reloadTries,
         missedChallenges: S.missChallenges,
         avgReactionMs: avgReaction(),
-        reactions: S.reactions
+        reactions: S.reactions,
+        blockedPrint: S.blockedPrint,
+        automation: S.automation,
+        webrtc: S.webrtc,
+        secondTab: S.secondTab,
+        clockTamper: S.clockTamper
       },
       device: detect(),
       violations: S.viol.map(function (v) { return { time: hms(v.t), type: v.type, label: v.label, weight: v.weight }; })
@@ -374,7 +581,8 @@ window.Monitor = (function () {
     S.copyAttempts = 0; S.blockedKeys = 0; S.screens = 1; S.reactions = [];
     S.missChallenges = 0; S.reloadTries = 0; S.devtools = false;
     S.focusedMs = 0; S.totalMs = 0; S.challengeActive = false; S.unfocusedSince = 0;
-    S.lastScreenEvent = 0;
+    S.lastScreenEvent = 0; S.blockedPrint = 0;
+    /* флаги взлома не сбрасываются: они характеризуют окружение, а не сессию */
   }
 
   /* ручной штраф (используется приложением, например выход из full-screen) */
@@ -388,6 +596,15 @@ window.Monitor = (function () {
     detect: detect, report: report, reset: reset, cheatPercent: cheatPercent,
     concentration: concentration, focusRatio: focusRatio, avgReaction: avgReaction,
     penalty: penalty, setBaseline: setBaseline,
+    /* защита v4.0 — наружу, чтобы проверки можно было запускать из тестов */
+    guards: {
+      detectAutomation: detectAutomation,
+      checkNative: checkNative,
+      clockGuard: clockGuard,
+      debuggerGuard: debuggerGuard,
+      tabHeartbeat: tabHeartbeat,
+      patchGetDisplayMedia: patchGetDisplayMedia
+    },
     state: S
   };
 })();

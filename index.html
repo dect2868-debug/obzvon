@@ -10,7 +10,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=3.8" />
+  <link rel="stylesheet" href="css/styles.css?v=4.0" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -36,7 +36,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub">ВЕРСИЯ 3.8</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 4.0</div>
         </div>
       </div>
 
@@ -46,6 +46,7 @@
         <a class="nav-link" href="#view-system" data-view="system"><i>💻</i><span>Система</span></a>
         <a class="nav-link" href="#view-memory" data-view="memory"><i>🧠</i><span>Память</span></a>
         <a class="nav-link" href="#view-results" data-view="results"><i>📊</i><span>Результаты</span></a>
+        <a class="nav-link" href="#view-archive" data-view="archive"><i>🗂</i><span>История</span></a>
         <a class="nav-link" href="#view-feed" data-view="feed"><i>📜</i><span>Журнал</span></a>
         <a class="nav-link" href="#view-news" data-view="news"><i>📣</i><span>Новости</span></a>
         <a class="nav-link" href="#view-help" data-view="help"><i>❓</i><span>Справка</span></a>
@@ -76,6 +77,7 @@
           <div class="badge badge-idle" id="statusBadge">не начат</div>
         </div>
 
+        <button type="button" class="icon-btn" id="btnUpdate" title="Проверить обновления" aria-label="Проверить обновления">⟳</button>
         <button type="button" class="icon-btn" id="btnSound" title="Звук">🔊</button>
       </header>
 
@@ -108,6 +110,24 @@
             <div class="metric"><span>НАРУШЕНИЯ</span><b id="violCount">0</b></div>
             <div class="metric m-mem"><span>ПАМЯТЬ СТРАНИЦЫ</span><b id="memValue">—</b><div class="bar"><i id="memBar"></i></div></div>
             <div class="metric m-mem"><span>ПАМЯТЬ ПК (JS-heap)</span><b id="heapValue">—</b></div>
+          </section>
+
+          <section class="panel live-panel" id="livePanel">
+            <div class="panel-head">
+              <span class="panel-title">ЖИВАЯ ДИНАМИКА</span>
+              <span class="panel-hint" id="liveHint">концентрация и «читомеряк» в реальном времени</span>
+            </div>
+            <div class="panel-body">
+              <canvas id="liveChart" width="640" height="150"></canvas>
+              <div class="live-legend">
+                <span class="lg lg-ok">● концентрация</span>
+                <span class="lg lg-bad">● читомеряк</span>
+                <span class="lg lg-ok">▲ верно</span>
+                <span class="lg lg-warn">▲ провал</span>
+                <span class="lg lg-bad">│ нарушение</span>
+              </div>
+              <div class="live-summary" id="liveSummary">ожидание сессии</div>
+            </div>
           </section>
 
           <section class="gate" id="gate">
@@ -293,6 +313,27 @@
           </section>
         </div>
 
+        <!-- ===== СТРАНИЦА: ИСТОРИЯ ОБЗВОНОВ ===== -->
+        <div class="view" id="view-archive" hidden>
+          <section class="panel" id="archivePanel">
+            <div class="panel-head"><span class="panel-title">ИСТОРИЯ ОБЗВОНОВ</span><span class="panel-hint" id="archCount">0</span></div>
+            <div class="panel-body">
+              <div class="arch-tools">
+                <button type="button" class="btn btn-ghost" id="btnArchCsv" title="Скачать историю в CSV">⬇ Экспорт CSV</button>
+                <button type="button" class="btn btn-ghost" id="btnArchClear" title="Удалить всю историю">⌫ Очистить</button>
+                <span class="stats-tools-hint">клик по строке — сравнение с предыдущим обзвоном</span>
+              </div>
+              <div class="arch-cards" id="archCards"></div>
+              <div class="arch-chart-wrap">
+                <span class="arch-chart-title">КОНЦЕНТРАЦИЯ ПО ОБЗВОНАМ</span>
+                <canvas id="archChart" width="640" height="120"></canvas>
+              </div>
+              <div class="arch-compare" id="archCompare"></div>
+              <table class="stat-table" id="archTable"></table>
+            </div>
+          </section>
+        </div>
+
         <!-- ===== СТРАНИЦА: ЖУРНАЛ ===== -->
         <div class="view" id="view-feed" hidden>
           <section class="panel feed" id="feedPanel">
@@ -312,6 +353,20 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v4.0</div>
+                  <div class="news-body">
+                    <h3>Живая динамика, история обзвонов, защита и авто-обновление</h3>
+                    <p>В реальном времени рисуется график концентрации и «читомеряка» с отметками
+                       испытаний и нарушений. Новая страница «История»: все прошлые обзвоны,
+                       сравнение с предыдущим и экспорт в CSV. Кнопка «⟳» и баннер обновления:
+                       страница обновляется сама, обзвон при этом не прерывается. Защита v4.0:
+                       детект автотестов и ботов, захвата экрана через WebRTC, второй вкладки,
+                       подмены системных часов и отладчика; подпись сохранённых данных сессии.
+                       Новая графика: неоновый след за курсором, импульсные волны и вспышка
+                       при блокировке.</p>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v3.8</div>
                   <div class="news-body">
                     <h3>Экспорт/импорт статистики, сортировка, «Справка» и защита</h3>
@@ -502,14 +557,27 @@
     </div>
   </div>
 
+  <div class="upd-banner" id="updBanner" hidden>
+    <span class="upd-icon" aria-hidden="true">⟳</span>
+    <div class="upd-text">
+      <b id="updTitle">Доступна новая версия</b>
+      <span id="updSub">страница обновится автоматически</span>
+    </div>
+    <span class="upd-count" id="updCount"></span>
+    <button type="button" class="btn btn-go" id="btnUpdateNow">Обновить сейчас</button>
+    <button type="button" class="btn btn-ghost" id="btnUpdateLater">Позже</button>
+  </div>
+
   <div class="toast" id="toast" hidden></div>
   <div class="wm-layer" id="wmLayer" aria-hidden="true"></div>
   <div class="noise" aria-hidden="true"></div>
 
-  <script src="js/fx.js?v=3.8"></script>
-  <script src="js/monitor.js?v=3.8"></script>
-  <script src="js/nav.js?v=3.8"></script>
-  <script src="js/app.js?v=3.8"></script>
+  <script src="js/fx.js?v=4.0"></script>
+  <script src="js/monitor.js?v=4.0"></script>
+  <script src="js/nav.js?v=4.0"></script>
+  <script src="js/live.js?v=4.0"></script>
+  <script src="js/archive.js?v=4.0"></script>
+  <script src="js/app.js?v=4.0"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

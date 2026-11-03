@@ -888,3 +888,102 @@ th.sorted{animation:thPulse .3s ease}
   transform:rotate(-24deg);opacity:0;transition:opacity .6s;user-select:none}
 .wm-layer.on{opacity:1}
 @media(max-width:900px){.help-grid{grid-template-columns:1fr}}
+
+/* ============================================================
+   ОБЗВОН v4.0 · ЖИВАЯ ДИНАМИКА, ИСТОРИЯ ОБЗВОНОВ,
+   АВТООБНОВЛЕНИЕ И НОВАЯ ЗАЩИТА
+   ============================================================ */
+
+/* ---------- живой график сессии ---------- */
+.live-panel .panel-body{padding:12px 16px 14px}
+#liveChart{width:100%;height:150px;display:block;border:1px solid var(--line);border-radius:12px;
+  background:
+    radial-gradient(600px 160px at 50% 120%,rgba(52,231,255,.07),transparent 70%),
+    linear-gradient(180deg,rgba(6,11,20,.75),rgba(4,7,14,.85));
+  box-shadow:inset 0 0 40px rgba(52,231,255,.05)}
+.live-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:9px;
+  font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--dim)}
+.lg-ok{color:var(--ok)}
+.lg-bad{color:var(--red)}
+.lg-warn{color:var(--warn)}
+.live-summary{margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.05);
+  font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--dim)}
+.live-summary b{color:var(--acc);font-weight:700}
+
+/* ---------- страница «История обзвонов» ---------- */
+.arch-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.arch-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.arch-card{padding:11px 14px;border-radius:12px;border:1px solid var(--line);
+  background:linear-gradient(160deg,rgba(12,20,36,.7),rgba(8,13,24,.75));
+  display:flex;flex-direction:column;gap:5px;position:relative;overflow:hidden}
+.arch-card::after{content:'';position:absolute;left:0;top:0;height:100%;width:2px;
+  background:linear-gradient(180deg,var(--acc),transparent);opacity:.6}
+.arch-card span{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;color:var(--dim)}
+.arch-card b{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--acc);
+  text-shadow:0 0 16px rgba(52,231,255,.3);font-variant-numeric:tabular-nums}
+.arch-chart-wrap{position:relative;margin-bottom:14px;padding:12px 14px;border-radius:12px;
+  border:1px solid var(--line);background:rgba(8,13,24,.45)}
+.arch-chart-title{position:absolute;top:8px;left:14px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:2px;color:var(--dim)}
+#archChart{width:100%;height:120px;display:block;margin-top:14px}
+.arch-compare{margin-bottom:14px}
+.arch-cmp-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;
+  font-family:var(--mono);font-size:11px}
+.arch-cmp-title{letter-spacing:2.5px;color:var(--acc)}
+.arch-cmp-cur{color:var(--txt);font-weight:700}
+.arch-cmp-prev{color:var(--dim)}
+.arch-compare .stat-table td:last-child{text-align:right}
+.delta{font-family:var(--mono);font-weight:700}
+.delta.up{color:var(--ok)}
+.delta.down{color:var(--red)}
+.delta.flat{color:var(--dim)}
+#archTable{margin-top:6px}
+#archTable td.v-ok{color:var(--ok)}
+#archTable td.v-mid{color:var(--warn)}
+#archTable td.v-bad{color:var(--red)}
+#archTable tr.sel td{background:rgba(52,231,255,.09)}
+#archTable tr:hover td{background:rgba(52,231,255,.05);cursor:pointer}
+.arch-del{width:22px;height:22px;border-radius:7px;border:1px solid var(--line);background:transparent;
+  color:var(--dim);cursor:pointer;font-size:11px;line-height:1;transition:.15s}
+.arch-del:hover{border-color:var(--red);color:var(--red);background:rgba(255,77,109,.12)}
+.arch-empty{padding:18px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:11.5px}
+
+/* ---------- баннер обновления ---------- */
+.upd-banner{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:210;max-width:94vw;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 16px;border-radius:16px;
+  border:1px solid transparent;
+  background:
+    linear-gradient(135deg,rgba(20,32,58,.97),rgba(10,16,30,.97)) padding-box,
+    linear-gradient(120deg,rgba(52,231,255,.7),rgba(157,255,91,.45),rgba(255,77,216,.6)) border-box;
+  box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 34px rgba(52,231,255,.16);
+  animation:updIn .4s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes updIn{from{opacity:0;transform:translate(-50%,-16px)}}
+.upd-icon{font-size:22px;color:var(--acc);animation:spin 3.4s linear infinite;filter:drop-shadow(0 0 8px var(--acc))}
+.upd-text{display:flex;flex-direction:column;gap:3px;min-width:190px}
+.upd-text b{font-family:var(--mono);font-size:12.5px;letter-spacing:1px;color:#eaf6ff}
+.upd-text span{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+.upd-count{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--warn);
+  white-space:nowrap;text-shadow:0 0 10px rgba(255,184,77,.4)}
+.upd-banner .btn{padding:9px 14px;font-size:11px}
+
+/* ---------- метка версии: пульс при наличии обновления ---------- */
+#verBadge.has-update{color:var(--warn);animation:verPulse 1.6s ease-in-out infinite;
+  text-shadow:0 0 12px rgba(255,184,77,.6)}
+@keyframes verPulse{0%,100%{opacity:.65}50%{opacity:1}}
+
+/* ---------- v4.0: новая графика ---------- */
+/* мягкое свечение под живым графиком */
+.live-panel{position:relative}
+.live-panel::after{background:linear-gradient(180deg,transparent,rgba(91,255,157,.05),transparent)}
+/* кнопка проверки обновлений с «дыханьем» */
+#btnUpdate{position:relative}
+#btnUpdate::after{content:'';position:absolute;inset:-2px;border-radius:12px;pointer-events:none;
+  border:1px solid rgba(52,231,255,.35);opacity:0}
+#btnUpdate:hover::after{opacity:1;animation:ripple 1.4s ease-out infinite}
+
+@media(max-width:640px){
+  .upd-banner{gap:10px;padding:10px 12px}
+  .upd-text{min-width:0}
+  .upd-count{width:100%;text-align:center}
+  #liveChart{height:130px}
+}

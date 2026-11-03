@@ -1,30 +1,38 @@
 /* ============================================================
-   ОБЗВОН v2 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v4.0 :: APP  (логика сессии и испытаний)
    ============================================================ */
+
+/* ---------- защита от встраивания ----------
+   Страницу нельзя открыть во фрейме: сначала показываем
+   запрет, потом пытаемся увести верхнее окно на эту страницу. */
+(function () {
+  var BLOCK_HTML =
+    '<head><meta charset="utf-8"><title>Запрещено</title></head>' +
+    '<body style="background:#060a12;color:#dbe7ff;font-family:monospace;' +
+    'display:flex;align-items:center;justify-content:center;height:100vh;margin:0">' +
+    'Встраивание страницы запрещено. Откройте её отдельно.</body>';
+  var blocked = false;
+  try {
+    if (window.top !== window.self) {
+      blocked = true;
+      try { document.documentElement.innerHTML = BLOCK_HTML; } catch (e) {}
+      try { window.top.location = window.location.href; } catch (e2) {}
+    }
+  } catch (e) {
+    blocked = true;
+    try { document.documentElement.innerHTML = BLOCK_HTML; } catch (e2) {}
+  }
+  window.__OBZ_BLOCKED = blocked;
+})();
+
 (function () {
   'use strict';
 
-  /* ---------- защита от встраивания ---------- */
-  try {
-    if (window.top !== window.self) {
-      window.top.location = window.location.href;
-      document.documentElement.innerHTML =
-        '<head><meta charset="utf-8"><title>Запрещено</title></head>' +
-        '<body style="background:#060a12;color:#dbe7ff;font-family:monospace;' +
-        'display:flex;align-items:center;justify-content:center;height:100vh;margin:0">' +
-        'Встраивание страницы запрещено. Откройте её отдельно.</body>';
-    }
-  } catch (e) {
-    document.documentElement.innerHTML =
-      '<head><meta charset="utf-8"><title>Запрещено</title></head>' +
-      '<body style="background:#060a12;color:#dbe7ff;font-family:monospace;' +
-      'display:flex;align-items:center;justify-content:center;height:100vh;margin:0">' +
-      'Встраивание страницы запрещено. Откройте её отдельно.</body>';
-  }
+  if (window.__OBZ_BLOCKED) return;
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '3.8',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '4.0',        // версия (должна совпадать с version.json и ?v= в index.html)
     /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
@@ -37,7 +45,11 @@
     chDelayMax: 25000,
     holdMs: 2000,             // (база) удержание клавиши
     idleLimit: 65000,         // мс простоя до штрафа
-    storageKey: 'obzvon_v2_state'
+    storageKey: 'obzvon_v2_state',
+    updateCheckMs: 60000,     // как часто проверять новую версию, мс
+    autoUpdateMs: 5000,       // пауза перед авто-обновлением (вне сессии), мс
+    postSessionUpdateMs: 20000, /* пауза перед обновлением после обзвона, мс */
+    integrityCheckMs: 20000   // как часто сверять целостность DOM и кода, мс
   };
 
   /* таймауты по типам испытаний (мс) */
@@ -121,7 +133,10 @@
    'btnUnlock','sumOverlay','sumTag','sumVerdict','sumTable','btnSumReport','btnSumClose','toast','stroopRow',
    'totalConc','concTrend','errBanner','selCalib','statTable','chTable','chTableBody','chStat','partPanel','chPad',
    'btnPauseSelf','btnEndSelf','achRow','sessionStart','memValue','memBar','heapValue',
-   'btnExportStats','btnImportStats','importFile','wmLayer']
+   'btnExportStats','btnImportStats','importFile','wmLayer',
+    'updBanner','updTitle','updSub','updCount','btnUpdateNow','btnUpdateLater','btnUpdate','verBadge',
+    'liveChart','liveSummary','archCards','archChart','archCompare','archTable','archCount',
+    'btnArchCsv','btnArchClear']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- состояние ---------- */
@@ -140,6 +155,7 @@
     lastKind: null,
     calibFails: 0,        // провалов калибровки за загрузку (для фишки «ЧИСТАЯ КАЛИБРОВКА»)
     hadReload: false,     // сессия восстанавливалась после перезагрузки (фишка «ВОЗВРАЩЕНИЕ»)
+    integrityOk: true,    // подпись сохранённых данных не нарушалась
     baseReaction: null   // база реакции с калибровки (мс), переживает итоги
   };
 
@@ -398,11 +414,15 @@
     });
   }
 
+  var CH_SEQ = 0;
   function logChallenge(ok, ms, note) {
+    CH_SEQ++;
     CH_LOG.push({
-      n: CH_LOG.length + 1, kind: CH.kind, calib: CH.calib,
+      n: CH_SEQ, kind: CH.kind, calib: CH.calib,
       ok: !!ok, ms: ok ? ms : null, note: note || '', time: ts()
     });
+    /* журнал ограничен — при очень длинном обзвоне страница не разрастается (v4.0) */
+    if (CH_LOG.length > 500) CH_LOG.shift();
     updateTables();
   }
 
@@ -632,6 +652,7 @@
     }
     updateMetrics();
     /* события в журнале: сеансовые испытания целиком, калибровка — только итогом */
+    if (window.Live && !CH.calib) Live.mark(ok ? 'ok' : 'fail');
     if (CH.calib) {
       if (ST.calibDone >= CONFIG.calibCount) {
         feedAdd({ time: ts(), label: 'Калибровка пройдена · база реакции ' + (ST.baseReaction || Monitor.avgReaction() || '—') + ' мс', sev: 0 });
@@ -788,6 +809,8 @@
     toast('Обзвон начат. Испытания будут появляться каждые 10–25 секунд', 'good');
     beep(660, 200, 'sine', .05);
     CH_SEANCE = 1;
+    /* живой график сессии (v4.0) */
+    if (window.Live) { Live.reset(); Live.start(); }
     scheduleNext();
     saveState();
   }
@@ -797,6 +820,7 @@
     ST.startedAt += Date.now() - ST.runSince;   /* зафиксировать пройденный отрезок */
     ST.state = 'paused';
     Monitor.setRunning(false);
+    if (window.Live) Live.stop();
     clearChTimers(); CH.active = false; Monitor.setChallengeActive(false);
     els.chTarget.hidden = true;
     setBadge('пауза', 'badge-pause');
@@ -812,6 +836,7 @@
     ST.state = 'running';
     ST.runSince = Date.now();
     Monitor.setRunning(true);
+    if (window.Live) Live.start();
     els.pauseOverlay.hidden = true;
     setBadge('идёт', 'badge-run');
     els.btnPause.disabled = false;
@@ -844,6 +869,7 @@
     els.lockOverlay.hidden = false;
     document.body.classList.add('shake');
     setTimeout(function () { document.body.classList.remove('shake'); }, 400);
+    if (window.FX) FX.flash('#ff4d6d');
     saveState();
   }
 
@@ -853,6 +879,7 @@
     if (ST.state === 'running') ST.startedAt += Date.now() - ST.runSince;  /* итоговая длительность */
     ST.state = 'ended';
     Monitor.setRunning(false);
+    if (window.Live) Live.stop();
     updateWatermark();
     clearChTimers(); CH.active = false; Monitor.setChallengeActive(false);
     els.pauseOverlay.hidden = true; els.lockOverlay.hidden = true;
@@ -879,6 +906,7 @@
     var ms = memStats();
     var rows = [
       ['Длительность', fmt(elapsed())],
+      ['Версия системы', 'v' + CONFIG.appVersion],
       ['Начало сессии', ST.sessionStartAt ? fmtClock(ST.sessionStartAt) : '—'],
       ['Концентрация', Monitor.concentration() + '%'],
       ['Читомеряк', cheat + '%'],
@@ -906,9 +934,36 @@
     /* фишки */
     var achList = renderAch(computeAch());
 
+    /* история обзвонов (v4.0) — запись в архив для сравнения */
+    var seanceLog = CH_LOG.filter(function (r) { return !r.calib; });
+    if (window.Archive) {
+      try {
+        Archive.add({
+          id: ST.sessionId || ('S' + Date.now().toString(36).toUpperCase()),
+          startedAt: ST.sessionStartAt || Date.now(),
+          endedAt: Date.now(),
+          duration: elapsed(),
+          conc: Monitor.concentration(),
+          cheat: cheat,
+          focus: Monitor.focusRatio(),
+          reaction: ar,
+          verdict: verdict,
+          challenges: seanceLog.length,
+          ok: seanceLog.filter(function (r) { return r.ok; }).length,
+          viol: S.viol.length,
+          chips: achList.map(function (c) { return c[1]; }),
+          device: (Monitor.detect() || {}).kind || ''
+        });
+      } catch (eArch) {
+        /* ошибка отрисовки архива не должна ломать итоги обзвона */
+      }
+    }
+
     els.sumOverlay.hidden = false;
     if (verdict === 'ЗАЧЁТ') sndGood(); else sndBad();
     toast('Средняя концентрация обновлена: ' + totAvg + '%', 'good', 4200);
+    /* если ждали обновление — применяем его после итогов (обзвон не прерывается) */
+    if (upd.pending) { upd.pending = false; startAutoUpdate(CONFIG.postSessionUpdateMs); }
     feedAdd({ time: ts(), label: 'Обзвон завершён · вердикт: ' + verdict + ' · ср. концентрация ' + totAvg + '% · фишек: ' + achList.length, sev: verdict === 'ЗАЧЁТ' ? 0 : 2 });
     clearState();
   }
@@ -1081,6 +1136,20 @@
       list.push(['🔒', 'СТАЛЬНОЙ КОРПУС', 'перезагрузок не было', 'guard']);
     }
 
+    /* --- v4.0: защита и контроль --- */
+    if (seance >= 5 && !S.automation && !S.webrtc && !S.clockTamper && !S.secondTab) {
+      list.push(['🛰', 'БЕЗ ТЕЛЕМЕТРИИ', 'захватов и автотестов не было', 'guard']);
+    }
+    if (S.blockedKeys >= 10) {
+      list.push(['🧱', 'КИРПИЧНАЯ СТЕНА', S.blockedKeys + ' сочетаний отбито', 'cool']);
+    }
+    if (S.screens === 1 && seance >= 5) {
+      list.push(['👁', 'ОДИН ЭКРАН', 'второго монитора не было', 'guard']);
+    }
+    if (ST.integrityOk && seance >= 3) {
+      list.push(['🔐', 'ЦЕЛОСТНОСТЬ', 'данные сессии под подписью', 'gold']);
+    }
+
     if (!list.length) list.push(['🥊', 'ЕСТЬ К ЧЕМУ СТРЕМИТЬСЯ', 'попробуйте ещё раз', 'muted']);
     return list;
   }
@@ -1113,20 +1182,48 @@
   });
 
   /* ---------- защита от перезагрузки ---------- */
+
+  /* ---------- подпись сохранённых данных сессии (v4.0) ----------
+     Секрет выводится из хеша кода куратора, поэтому в исходниках его
+     нет в открытом виде. Подпись защищает от правки localStorage:
+     «почистить» штрафы в хранилище больше не получится. */
+  function stateSecret() {
+    return sha256hex(CONFIG.passHash + '|obzvon|v4|integrity|' + CONFIG.appVersion);
+  }
+  function statePayload() {
+    return {
+      state: ST.state, sessionId: ST.sessionId, elapsed: elapsed(),
+      sessionStartAt: ST.sessionStartAt,
+      score: Monitor.state.score, viol: Monitor.state.viol,
+      tabSwitches: Monitor.state.tabSwitches, focusLosses: Monitor.state.focusLosses,
+      idleHits: Monitor.state.idleHits, missChallenges: Monitor.state.missChallenges,
+      reactions: Monitor.state.reactions, screens: Monitor.state.screens,
+      chLog: CH_LOG, baseReaction: ST.baseReaction,
+      feed: FEED.slice(-40),
+      updatedAt: Date.now()
+    };
+  }
+  function pickPayload(d) {
+    return {
+      state: d.state, sessionId: d.sessionId, elapsed: d.elapsed,
+      sessionStartAt: d.sessionStartAt,
+      score: d.score, viol: d.viol,
+      tabSwitches: d.tabSwitches, focusLosses: d.focusLosses,
+      idleHits: d.idleHits, missChallenges: d.missChallenges,
+      reactions: d.reactions, screens: d.screens,
+      chLog: d.chLog, baseReaction: d.baseReaction,
+      feed: d.feed,
+      updatedAt: d.updatedAt
+    };
+  }
+  function signPayload(p) { return sha256hex(JSON.stringify(p) + '|' + stateSecret()); }
+
   function saveState() {
     if (['running', 'paused', 'locked'].indexOf(ST.state) < 0) return;
     try {
-      localStorage.setItem(CONFIG.storageKey, JSON.stringify({
-        state: ST.state, sessionId: ST.sessionId, elapsed: elapsed(),
-        sessionStartAt: ST.sessionStartAt,
-        score: Monitor.state.score, viol: Monitor.state.viol,
-        tabSwitches: Monitor.state.tabSwitches, focusLosses: Monitor.state.focusLosses,
-        idleHits: Monitor.state.idleHits, missChallenges: Monitor.state.missChallenges,
-        reactions: Monitor.state.reactions, screens: Monitor.state.screens,
-        chLog: CH_LOG, baseReaction: ST.baseReaction,
-        feed: FEED.slice(-40),
-        updatedAt: Date.now()
-      }));
+      var p = statePayload();
+      p.sig = signPayload(p);
+      localStorage.setItem(CONFIG.storageKey, JSON.stringify(p));
     } catch (e) {}
   }
   function clearState() { try { localStorage.removeItem(CONFIG.storageKey); } catch (e) {} }
@@ -1140,6 +1237,9 @@
     if (!d || Date.now() - (d.updatedAt || 0) > 60000) { clearState(); return; }
     if (d.state !== 'running') { clearState(); return; }
 
+    /* подпись не совпала — данные сессии правили вручную */
+    var tampered = d.sig !== signPayload(pickPayload(d));
+
     /* обзвон шёл и страницу перезагрузили — это нарушение */
     ST.state = 'running';
     ST.hadReload = true;   /* для фишки «ВОЗВРАЩЕНИЕ» */
@@ -1149,6 +1249,7 @@
     ST.startedAt = d.elapsed || 0; ST.runSince = Date.now();
     ST.baseReaction = d.baseReaction || null;
     CH_LOG = d.chLog || [];
+    CH_SEQ = CH_LOG.length ? CH_LOG[CH_LOG.length - 1].n : 0;
     FEED = d.feed || [];
     els.signalList.innerHTML = '';
     feedRebuild();
@@ -1167,6 +1268,14 @@
     S.missChallenges = d.missChallenges || 0; S.reactions = d.reactions || []; S.screens = d.screens || 1;
     Monitor.setRunning(true);
     Monitor.addReloadGuardPenalty();
+    if (tampered) {
+      ST.integrityOk = false;
+      S.score += 20;
+      S.viol.push({ t: Date.now(), type: 'tamper', label: 'Подмена сохранённых данных сессии (подпись не совпала)', weight: 20 });
+      feedAdd({ time: ts(), label: 'Подмена данных сессии — подпись не совпала (+20)', sev: 2 });
+      toast('Обнаружена подмена данных сессии! +20 к «читомеряку»', 'bad', 6000);
+    }
+    if (window.Live) { Live.reset(); Live.start(); }
     feedAdd({ time: ts(), label: 'Сессия восстановлена после перезагрузки (+6)', sev: 2 });
     toast('Обнаружена перезагрузка страницы во время обзвона! +6 к «читомеряку»', 'bad', 5200);
     scheduleNext();
@@ -1184,11 +1293,14 @@
   /* ---------- отчёт ---------- */
   function downloadReport() {
     var data = Monitor.report({ session: ST.sessionId, verdict: els.sumVerdict.textContent || null });
+    data.appVersion = 'v' + CONFIG.appVersion;
     data.totals = loadTotals();
     data.challenges = CH_LOG.slice();
     data.achievements = (loadTotals().ach) || {};
     data.sessionStartedAt = ST.sessionStartAt ? new Date(ST.sessionStartAt).toISOString() : null;
     data.memory = memStats();
+    if (window.Live) data.live = Live.data();
+    if (window.Archive) data.history = Archive.list();
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1441,6 +1553,14 @@
       setTimeout(function () { document.body.classList.remove('shake'); }, 400);
       beep(item.sev >= 2 ? 220 : 440, 180, 'square', .04);
       updateMetrics();
+      /* живой график: отметка нарушения + волна на фоне (v4.0) */
+      if (window.Live) Live.mark('viol');
+      if (window.FX) {
+        var r = els.metrics ? els.metrics.getBoundingClientRect() : null;
+        FX.pulse(r ? r.left + r.width / 2 : (window.innerWidth / 2),
+                 r ? r.top + 40 : (window.innerHeight / 3),
+                 item.sev >= 2 ? '#ff4d6d' : '#ffb84d');
+      }
       if (shouldLock()) lockSession();
     },
     focus: updateMetrics,
@@ -1448,6 +1568,7 @@
       updateMetrics();
       if (ST.state === 'running') {
         els.sessionTimer.textContent = fmt(elapsed());
+        if (window.Live) Live.sample(Monitor.concentration(), Monitor.cheatPercent());
         if (shouldLock()) lockSession();
       }
     }
@@ -1618,23 +1739,103 @@
     b._t = setTimeout(function () { b.hidden = true; }, 12000);
   });
 
+  /* ============================================================
+     ОБНОВЛЕНИЕ САЙТА (v4.0)
+     Проверка version.json, баннер с кнопкой «Обновить сейчас»
+     и авто-обновление: вне сессии — сразу, во время сессии —
+     сразу после её завершения (обзвон не прерывается).
+     ============================================================ */
+  var upd = { found: null, left: 0, timer: null, applying: false, pending: false };
+
+  function showUpdateBanner(newV) {
+    upd.found = newV;
+    if (els.updBanner) {
+      els.updBanner.hidden = false;
+      els.updTitle.textContent = 'Доступна новая версия ' + newV;
+      els.updSub.textContent = 'установлена ' + CONFIG.appVersion + ' · обновление не прервёт обзвон';
+    }
+    if (els.verBadge) els.verBadge.classList.add('has-update');
+    startAutoUpdate();
+  }
+
+  function stopAutoUpdate() {
+    if (upd.timer) { clearInterval(upd.timer); upd.timer = null; }
+  }
+
+  function startAutoUpdate(delayMs) {
+    if (upd.timer) return;
+    var inSession = ['running', 'paused', 'locked'].indexOf(ST.state) >= 0;
+    if (inSession) {
+      upd.pending = true;
+      if (els.updCount) els.updCount.textContent = 'обновление после обзвона';
+      return;
+    }
+    var total = Math.ceil((delayMs || CONFIG.autoUpdateMs) / 1000);
+    upd.left = total;
+    if (els.updCount) els.updCount.textContent = 'обновление через ' + total + ' с';
+    upd.timer = setInterval(function () {
+      upd.left--;
+      if (els.updCount) els.updCount.textContent = 'обновление через ' + Math.max(0, upd.left) + ' с';
+      if (upd.left <= 0) { stopAutoUpdate(); applyUpdate(); }
+    }, 1000);
+  }
+
+  function applyUpdate() {
+    if (upd.applying) return;
+    upd.applying = true;
+    stopAutoUpdate();
+    try {
+      var v = encodeURIComponent(upd.found || CONFIG.appVersion);
+      var sep = location.search ? '&' : '?';
+      var url = location.pathname + location.search + sep + 'obzupd=' + v + location.hash;
+      try { window.__obzLastNav = url; } catch (eNav) {}
+      location.replace(url);
+    } catch (e) {
+      try { location.reload(); } catch (e2) {}
+    }
+  }
+
   /* ---------- авто-проверка обновлений (только при раздаче по http) ---------- */
-  function checkUpdates() {
-    if (location.protocol === 'file:' || !window.fetch) return;
+  function checkUpdates(manual) {
+    if (location.protocol === 'file:' || !window.fetch) {
+      if (manual) toast('Проверка обновлений доступна только при раздаче по http', '');
+      return;
+    }
     fetch('version.json?ts=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (d && d.v && d.v !== CONFIG.appVersion) {
-          toast('Доступна новая версия ' + d.v + ' — обновите страницу (Ctrl+F5)', 'bad', 9000);
+          showUpdateBanner(d.v);
+        } else if (manual) {
+          toast('Обновлений нет — установлена свежая версия ' + CONFIG.appVersion, 'good');
         }
       })
-      .catch(function () {});
+      .catch(function () {
+        if (manual) toast('Не удалось проверить обновления (нет связи)', '');
+      });
   }
-  setTimeout(checkUpdates, 5000);
+  setTimeout(function () { checkUpdates(false); }, 5000);
+  setInterval(function () { checkUpdates(false); }, CONFIG.updateCheckMs);
 
-  /* ---------- проверка целостности кода (v3.8) ----------
+  if (els.btnUpdateNow) els.btnUpdateNow.addEventListener('click', applyUpdate);
+  if (els.btnUpdateLater) els.btnUpdateLater.addEventListener('click', function () {
+    if (els.updBanner) els.updBanner.hidden = true;
+    stopAutoUpdate();
+    if (els.verBadge) els.verBadge.classList.remove('has-update');
+    toast('Обновление отложено', '');
+  });
+  if (els.btnUpdate) els.btnUpdate.addEventListener('click', function () { checkUpdates(true); });
+  if (els.verBadge) {
+    els.verBadge.style.cursor = 'pointer';
+    els.verBadge.title = 'Проверить обновления';
+    els.verBadge.addEventListener('click', function () { checkUpdates(true); });
+  }
+
+  /* ---------- проверка целостности кода (v3.8 → v4.0) ----------
      Контрольная сумма ключевых функций снимается при загрузке и
-     периодически сверяется: при расхождении — штраф и предупреждение. */
+     периодически сверяется: при расхождении — штраф и предупреждение.
+     v4.0: добавлена проверка целостности DOM (удаление водяного знака,
+     карточек метрик или служебных блоков тоже считается взломом). */
   function codeFingerprint() {
     try {
       return sha256hex([
@@ -1642,11 +1843,31 @@
         passMatch.toString(),
         startSession.toString(),
         endChallenge.toString(),
-        Monitor.penalty ? Monitor.penalty.toString() : ''
+        Monitor.penalty ? Monitor.penalty.toString() : '',
+        (window.Live && window.Live.sample) ? window.Live.sample.toString() : '',
+        (window.Archive && window.Archive.add) ? window.Archive.add.toString() : '',
+        (window.Monitor && window.Monitor.guards) ? window.Monitor.guards.detectAutomation.toString() : ''
       ].join('|'));
     } catch (e) { return ''; }
   }
   var codeBase = null;
+
+  /* структурная целостность страницы */
+  function domIntegrity() {
+    try {
+      if (els.wmLayer && document.body && !document.body.contains(els.wmLayer)) {
+        return 'Водяной знак сессии удалён со страницы';
+      }
+      var need = ['playfield', 'chTask', 'metrics', 'concValue', 'cheatValue', 'sideNav', 'signalList'];
+      for (var i = 0; i < need.length; i++) {
+        if (!document.getElementById(need[i])) return 'Удалён служебный блок #' + need[i];
+      }
+      if (!document.querySelector('.metric')) return 'Удалены карточки метрик';
+      if (!document.querySelector('.side-nav .nav-link')) return 'Удалено боковое меню';
+      return null;
+    } catch (e) { return null; }
+  }
+
   function codeGuard() {
     var fp = codeFingerprint();
     if (!fp) return;
@@ -1656,10 +1877,38 @@
       Monitor.penalty('Вмешательство в код', 6, 3);
       toast('Обнаружено вмешательство в код страницы', 'bad', 6000);
       feedAdd({ time: ts(), label: 'Проверка целостности кода: несовпадение', sev: 2 });
+      ST.integrityOk = false;
+    }
+    /* структура страницы тоже должна быть нетронутой */
+    var broken = domIntegrity();
+    if (broken) {
+      Monitor.penalty(broken, 10, 2);
+      toast(broken, 'bad', 6000);
+      feedAdd({ time: ts(), label: 'Проверка целостности страницы: ' + broken, sev: 2 });
+      ST.integrityOk = false;
     }
   }
   codeGuard();
-  setInterval(codeGuard, 30000);
+  setInterval(codeGuard, CONFIG.integrityCheckMs);
+
+  /* ---------- диагностика (только чтение) ----------
+     Небольшой публичный API без доступа к коду куратора и без
+     возможности отключить проверки: используется автотестами и
+     для проверки целостности страницы из консоли куратора. */
+  window.OBZ = {
+    v: CONFIG.appVersion,
+    state: function () {
+      return {
+        state: ST.state, sessionId: ST.sessionId, integrityOk: ST.integrityOk,
+        concentration: Monitor.concentration(), cheat: Monitor.cheatPercent(),
+        violations: Monitor.state.viol.length, feed: FEED.length
+      };
+    },
+    integrity: function () { return domIntegrity(); },
+    fingerprint: function () { return codeFingerprint(); },
+    guard: function () { codeGuard(); },
+    update: function (v) { showUpdateBanner(v || 'next'); }
+  };
 
   updateMetrics();
   updateTotalConcUI();

@@ -47,3 +47,9 @@ local.settings.*
 # git
 .DS_Store
 Thumbs.db
+
+# ---- автотесты (node) ----
+node_modules/
+npm-debug.log*
+coverage/
+

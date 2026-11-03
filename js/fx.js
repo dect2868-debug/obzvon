@@ -1,9 +1,10 @@
 /* ============================================================
-   ОБЗВОН v3.8 · EPIC FX — космический фон + неоновые глифы:
+   ОБЗВОН v4.0 · EPIC FX — космический фон + неоновые глифы:
    живые мерцающие звёзды с параллаксом, редкие падающие
    звёзды, колонны падающих цифровых глифов, 3D-наклон
-   карточек по курсору, искры при клике. Уважает
-   prefers-reduced-motion. Работает и на file://
+   карточек по курсору, искры при клике, неоновый след за
+   курсором, импульсные волны. Уважает prefers-reduced-motion.
+   Работает и на file://
    ============================================================ */
 (function () {
   'use strict';
@@ -14,10 +15,13 @@
 
   var W = 0, H = 0;
   var DPR = Math.min(window.devicePixelRatio || 1, 2);
-  var stars = [], shots = [], glyphs = [], sparks = [];
+  var stars = [], shots = [], glyphs = [], sparks = [], trail = [], rings = [];
   var SPARK_COLORS = ['#34e7ff', '#ff4dd8', '#9dff5b', '#c084fc'];
+  var TRAIL_COLORS = ['rgba(52,231,255,', 'rgba(255,77,216,', 'rgba(157,255,91,'];
   var t = 0, raf = 0;
   var mx = 0, my = 0, px = 0, py = 0;          /* параллакс от курсора */
+  var cxp = -1, cyp = -1;                       /* позиция курсора в px */
+  var flashColor = null, flashLife = 0;
   var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var GLYPH_CHARS = '01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF<>/\\|+=';
   var GLYPH_COLORS = ['rgba(255,77,216,', 'rgba(52,231,255,', 'rgba(139,92,246,'];
@@ -174,6 +178,52 @@
       ctx.fillRect(sk.x - sk.vx * 2.4, sk.y - sk.vy * 2.4 - 0.4, sk.vx * 4.8, 0.8);
     }
     ctx.globalAlpha = 1;
+
+    /* ---------- неоновый след за курсором (v4.0) ---------- */
+    if (trail.length > 1) {
+      ctx.lineCap = 'round';
+      for (var tr = 1; tr < trail.length; tr++) {
+        var a = trail[tr - 1], b = trail[tr];
+        var fade = tr / trail.length;
+        ctx.strokeStyle = TRAIL_COLORS[tr % TRAIL_COLORS.length] + (fade * 0.5).toFixed(3) + ')';
+        ctx.lineWidth = 1 + fade * 5;
+        ctx.shadowColor = TRAIL_COLORS[tr % TRAIL_COLORS.length] + '0.55)';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    /* ---------- импульсные волны (v4.0) ---------- */
+    for (var ri = rings.length - 1; ri >= 0; ri--) {
+      var rg = rings[ri];
+      rg.r += rg.vr;
+      rg.life -= 0.022;
+      if (rg.life <= 0) { rings.splice(ri, 1); continue; }
+      ctx.globalAlpha = Math.max(0, rg.life) * 0.85;
+      ctx.strokeStyle = rg.c;
+      ctx.lineWidth = 2.2;
+      ctx.shadowColor = rg.c;
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(rg.x, rg.y, rg.r, 0, 6.2832);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+
+    /* ---------- полноэкранная вспышка (v4.0) ---------- */
+    if (flashLife > 0) {
+      flashLife -= 0.05;
+      var fa = Math.max(0, flashLife) * 0.16;
+      ctx.globalAlpha = fa;
+      ctx.fillStyle = flashColor || '#ff4d6d';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+
     raf = window.requestAnimationFrame(frame);
   }
 
@@ -195,6 +245,21 @@
     }
   }
 
+  /* ---------- публичный API эффектов (v4.0) ---------- */
+  function pulse(x, y, color) {
+    if (reduce) return;
+    if (rings.length > 24) return;
+    rings.push({ x: x, y: y, r: 6, vr: 3.4, life: 1, c: color || '#ff4d6d' });
+  }
+
+  function flash(color) {
+    if (reduce) return;
+    flashColor = color || '#ff4d6d';
+    flashLife = 1;
+  }
+
+  window.FX = { pulse: pulse, flash: flash };
+
   function start() {
     if (reduce) { drawStatic(); return; }
     if (!raf) raf = window.requestAnimationFrame(frame);
@@ -211,6 +276,13 @@
   window.addEventListener('mousemove', function (e) {
     mx = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
     my = (e.clientY / Math.max(1, window.innerHeight)) * 2 - 1;
+    if (reduce || document.hidden) return;
+    /* след: пишем точку, если курсор сместился заметно */
+    if (cxp < 0 || Math.abs(e.clientX - cxp) + Math.abs(e.clientY - cyp) > 3) {
+      cxp = e.clientX; cyp = e.clientY;
+      trail.push({ x: cxp, y: cyp });
+      if (trail.length > 26) trail.shift();
+    }
   }, { passive: true });
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) stop(); else start();
