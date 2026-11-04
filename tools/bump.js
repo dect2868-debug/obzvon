@@ -143,8 +143,10 @@ function syncAll(v, notes) {
 
   /* README */
   const readme = read('README.md');
-  const readmeNew = readme.replace(/^# ОБЗВОН v[\d.]+/m, '# ОБЗВОН v' + v);
-  if (readmeNew !== readme) { write('README.md', readmeNew); changed.push('README.md (заголовок)'); }
+  let readmeNew = readme.replace(/^# ОБЗВОН v[\d.]+/m, '# ОБЗВОН v' + v);
+  /* ссылки ?v= в тексте README тоже должны соответствовать версии */
+  readmeNew = readmeNew.replace(/\?v=[\d.]+/g, '?v=' + v);
+  if (readmeNew !== readme) { write('README.md', readmeNew); changed.push('README.md (заголовок и ссылки)'); }
 
   /* config.json — отметка версии */
   if (fs.existsSync(P('config.json'))) {
