@@ -93,7 +93,13 @@ if (vj) {
   const html = read('index.html');
   const refs = [...html.matchAll(/(?:src|href)="([^"?]+)(?:\?[^"]*)?"/g)].map((x) => x[1]);
   const local = refs.filter((r) => !/^(https?:|data:|mailto:|#)/.test(r));
-  const missing = local.filter((r) => !exists(r));
+  /* файл кодов доступа подставляется при сборке (в репозитории его нет) */
+  const OPTIONAL = ['js/auth.local.js'];
+  const missing = local.filter((r) => !exists(r) && OPTIONAL.indexOf(r) < 0);
+  const optionalMissing = local.filter((r) => !exists(r) && OPTIONAL.indexOf(r) >= 0);
+  if (optionalMissing.length) {
+    warn('файл(ы) ' + optionalMissing.join(', ') + ' отсутствуют — они подставляются при сборке (npm run build)');
+  }
   if (missing.length) err('нет файлов, на которые ссылается страница: ' + missing.join(', '));
   else ok('все подключаемые файлы (' + local.length + ') на месте');
 }
