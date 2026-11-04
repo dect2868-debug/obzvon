@@ -1063,6 +1063,62 @@ th.sorted{animation:thPulse .3s ease}
 }
 
 /* ============================================================
+   ОБЗВОН v4.9 · ЦВЕТ И ЗАМЕТНОЕ МЕНЮ
+   ============================================================ */
+
+/* кнопки-иконки: светлый текст (был чёрный — бургер не было видно) */
+.icon-btn{color:var(--txt)!important;display:inline-grid;place-items:center}
+.icon-btn svg{display:block}
+.burger{width:44px!important;height:44px!important;color:#cfdcec!important;
+  border-color:rgba(120,150,190,.3)!important;background:rgba(255,255,255,.05)!important}
+.burger:hover{background:rgba(76,201,224,.12)!important;border-color:rgba(76,201,224,.5)!important;
+  color:#eaf6ff!important}
+.burger:active{transform:scale(.94)!important}
+
+/* цветные акценты у карточек метрик — по смыслу показателя */
+.metric{position:relative;overflow:hidden}
+.metric::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;
+  background:linear-gradient(180deg,rgba(76,201,224,.55),rgba(76,201,224,.05))}
+.m-conc::before{background:linear-gradient(180deg,rgba(99,223,148,.75),rgba(99,223,148,.08))}
+.m-cheat::before{background:linear-gradient(180deg,rgba(240,97,111,.7),rgba(240,97,111,.08))}
+.m-total::before{background:linear-gradient(180deg,rgba(232,197,131,.6),rgba(232,197,131,.06))}
+.m-mem::before{background:linear-gradient(180deg,rgba(150,160,255,.55),rgba(150,160,255,.06))}
+
+/* тонкая цветная линия у панелей */
+.panel{position:relative}
+.panel > .panel-head::after{content:'';position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,rgba(76,201,224,.45),rgba(150,120,230,.3) 45%,rgba(99,223,148,.28));
+  pointer-events:none}
+
+/* цветная кромка верхней панели */
+.topbar{position:relative}
+.topbar::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,rgba(76,201,224,.55),rgba(150,120,230,.4) 50%,rgba(99,223,148,.4));
+  pointer-events:none}
+
+/* маркер раздела */
+.panel-title{position:relative;padding-left:14px!important}
+.panel-title::before{content:'';display:block;position:absolute;left:0;top:50%;margin-top:-4px;
+  width:6px;height:6px;border-radius:2px;background:var(--acc);
+  box-shadow:0 0 8px rgba(76,201,224,.6)}
+
+/* фон чуть цветнее */
+.bg-fx::after{background:
+  radial-gradient(900px 520px at 28% 12%,rgba(76,201,224,.16) 0%,transparent 62%),
+  radial-gradient(760px 480px at 82% 84%,rgba(150,110,235,.15) 0%,transparent 60%)}
+
+/* цветные состояния кнопок */
+.btn-ghost{color:#a9d8e6!important}
+.btn-go{background:linear-gradient(135deg,#3fbf7c,#5fd3e6)!important}
+.chip.gold{color:#e8c583!important}
+.live-badge{color:#8ff0b4!important;background:rgba(99,223,148,.14)!important}
+
+/* цветные значения в таблице результатов */
+.stat-table td.v-ok{color:#8ff0b4!important}
+.stat-table td.v-mid{color:#e8c583!important}
+.stat-table td.v-bad{color:#f79aa5!important}
+
+/* ============================================================
    ОБЗВОН v4.2 · АДМИНКА: вход по коду, блоки, стресс-тест
    ============================================================ */
 

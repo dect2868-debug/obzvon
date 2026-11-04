@@ -9,7 +9,9 @@
     "e2e": "node tests/e2e.js",
     "security": "node tests/security.js",
     "load": "node tests/load.js",
-    "stress": "node tests/stress.js"
+    "stress": "node tests/stress.js",
+    "build": "node tools/build.js",
+    "serve": "node tools/serve.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.0"

@@ -53,3 +53,6 @@ node_modules/
 npm-debug.log*
 coverage/
 
+# ---- сборка для своего хостинга (npm run build) ----
+dist/
+obzvon-site.zip

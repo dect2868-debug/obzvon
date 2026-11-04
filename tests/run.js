@@ -8,7 +8,8 @@ const suites = [
   require('./smoke'),
   require('./e2e'),
   require('./security'),
-  require('./load')
+  require('./load'),
+  require('./build')
 ];
 
 (async () => {
