@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.9 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v5.0 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,9 +32,23 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '4.9',        // версия (должна совпадать с version.json и ?v= в index.html)
-    /* КОД КУРАТОРА задаётся автором; в коде сайта он не хранится открытым текстом. */
+    appVersion: '5.0',        // версия (должна совпадать с version.json и ?v= в index.html)
+
+    /* ---------- КОДЫ ДОСТУПА (v5.0) ----------
+       У КУРАТОРА и ТЕХ. АДМИНИСТРАТОРА РАЗНЫЕ коды:
+         passHash  — код куратора  (пульт обзвона: старт/пауза/итог)
+         adminHash — код тех. администратора (надзор, админка, обновления)
+       Открытым текстом коды в коде НЕ хранятся — только хеш.
+       Надёжный вариант — PBKDF2-HMAC-SHA256 (соль + 150 000 итераций):
+         node tools/passgen.js "ваш код"
+       Там же — проверка, что код записан верно. */
     passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
+    passSalt: '',             // соль для PBKDF2 (пусто = старый sha256)
+    passIter: 0,
+    adminHash: '39de49a80246571c0c5ef0f1fdbd2baebb8e911765d6fcabba9abdf2b18bd3c0',
+    adminSalt: 'e26811268f06b14cdaf36cd190d170c3',
+    adminIter: 150000,
+
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
     authLockMs: 30000,        // длительность блокировки ввода кода, мс
     threshold: 60,            // порог «читомеряка» по умолчанию (%)
@@ -50,7 +64,24 @@
     autoUpdateMs: 5000,       // пауза перед авто-обновлением (вне сессии), мс
     postSessionUpdateMs: 20000, /* пауза перед обновлением после обзвона, мс */
     integrityCheckMs: 20000,  // как часто сверять целостность DOM и кода, мс
-    storageFallback: false      // true = localStorage недоступен, работаем в памяти
+    storageFallback: false,   // true = localStorage недоступен, работаем в памяти
+    /* возможности сайта — часть из них приходит из config.json (v5.0) */
+    features: {
+      autoUpdate: true,       // сайт сам применяет новую версию в фоне
+      strict: false,          // строгий режим: блокируются ещё и «вкладки/окна»
+      collectDevice: true,    // собирать данные об устройстве в отчёте
+      audit: true             // вести журнал действий
+    },
+    configUrl: 'config.json',  // удалённая конфигурация (функции и настройки)
+    statusUrl: 'status.json'   // состояние автоподдержки (пишет CI на GitHub)
+  };
+
+  /* ---------- РОЛИ (v5.0) ----------
+     Права раздельные: куратор ведёт обзвон, тех. администратор —
+     надзор, обслуживание и вмешательство. Коды разные. */
+  var ROLES = {
+    curator: { key: 'curator', title: 'Куратор', scope: 'call' },
+    admin:   { key: 'admin',   title: 'Тех. администратор', scope: 'call+admin' }
   };
 
   /* таймауты по типам испытаний (мс) */
@@ -69,31 +100,47 @@
     0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
     0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
   ];
-  function sha256hex(str) {
-    /* UTF-8 байты */
-    var utf8 = [];
+  function utf8Bytes(str) {
+    var out = [];
     for (var i = 0; i < str.length; i++) {
       var c = str.charCodeAt(i);
-      if (c < 0x80) utf8.push(c);
-      else if (c < 0x800) utf8.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
-      else utf8.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+      else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
     }
-    var len = utf8.length;
-    utf8.push(0x80);
-    while (utf8.length % 64 !== 56) utf8.push(0);
+    return out;
+  }
+  function bytesToHex(bytes) {
+    var hex = '';
+    for (var v = 0; v < bytes.length; v++) hex += ('0' + (bytes[v] & 0xff).toString(16)).slice(-2);
+    return hex;
+  }
+  function hexToBytes(hex) {
+    var out = [];
+    var s = String(hex || '');
+    for (var i = 0; i + 1 < s.length; i += 2) {
+      var n = parseInt(s.substr(i, 2), 16);
+      out.push(isNaN(n) ? 0 : n);
+    }
+    return out;
+  }
+  function sha256bytes(bytes) {
+    var msg = bytes.slice();
+    var len = bytes.length;
+    msg.push(0x80);
+    while (msg.length % 64 !== 56) msg.push(0);
     var bitLen = len * 8;
-    /* 64-битная длина big-endian: сначала старшие 32 бита (у нас всегда 0),
-       затем младшие 32 бита */
-    utf8.push(0, 0, 0, 0);
-    for (var s = 24; s >= 0; s -= 8) utf8.push((bitLen / Math.pow(2, s)) & 0xff);
+    /* 64-битная длина big-endian: старшие 32 бита всегда нулевые */
+    msg.push(0, 0, 0, 0);
+    for (var s = 24; s >= 0; s -= 8) msg.push((bitLen / Math.pow(2, s)) & 0xff);
 
     var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
     var w = new Array(64);
     function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
-    for (var off = 0; off < utf8.length; off += 64) {
+    for (var off = 0; off < msg.length; off += 64) {
       for (var t = 0; t < 16; t++) {
-        w[t] = ((utf8[off + t * 4] << 24) | (utf8[off + t * 4 + 1] << 16) |
-                (utf8[off + t * 4 + 2] << 8) | utf8[off + t * 4 + 3]) >>> 0;
+        w[t] = ((msg[off + t * 4] << 24) | (msg[off + t * 4 + 1] << 16) |
+                (msg[off + t * 4 + 2] << 8) | msg[off + t * 4 + 3]) >>> 0;
       }
       for (t = 16; t < 64; t++) {
         var s0 = rr(w[t - 15], 7) ^ rr(w[t - 15], 18) ^ (w[t - 15] >>> 3);
@@ -111,18 +158,90 @@
         h = g; g = f; f = e; e = (d + t1) >>> 0;
         d = c2; c2 = b; b = a; a = (t1 + t2) >>> 0;
       }
-      H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c2) >>> 0;
-      H[3] = (H[3] + d) >>> 0; H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0;
-      H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+      H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c2) >>> 0; H[3] = (H[3] + d) >>> 0;
+      H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
     }
-    var hex = '';
-    for (var v = 0; v < 8; v++) hex += ('00000000' + H[v].toString(16)).slice(-8);
-    return hex;
+    /* восемь 32-битных слов → 32 байта (big-endian) */
+    var out = new Array(32);
+    for (var w2 = 0; w2 < 8; w2++) {
+      out[w2 * 4]     = (H[w2] >>> 24) & 0xff;
+      out[w2 * 4 + 1] = (H[w2] >>> 16) & 0xff;
+      out[w2 * 4 + 2] = (H[w2] >>> 8) & 0xff;
+      out[w2 * 4 + 3] = H[w2] & 0xff;
+    }
+    return out;
   }
-  function passMatch(input) {
-    if (!input || !CONFIG.passHash) return false;
-    return sha256hex(input) === CONFIG.passHash;
+  function sha256hex(str) { return bytesToHex(sha256bytes(utf8Bytes(str))); }
+
+  /* HMAC-SHA256 поверх того же SHA-256 */
+  function hmacSha256(key, msg) {
+    var BS = 64, i;
+    var k = key.length > BS ? sha256bytes(key) : key.slice();
+    var ipad = new Array(BS), opad = new Array(BS);
+    for (i = 0; i < BS; i++) {
+      var b = i < k.length ? (k[i] & 0xff) : 0;
+      ipad[i] = b ^ 0x36; opad[i] = b ^ 0x5c;
+    }
+    var inner = sha256bytes(ipad.concat(msg));
+    return sha256bytes(opad.concat(inner));
   }
+
+  /* PBKDF2-HMAC-SHA256 → hex: перебор опубликованного хеша становится
+     практически невозможным (соль + 150 000 итераций) */
+  function pbkdf2hex(str, saltHex, iter, dkLen) {
+    var salt = hexToBytes(saltHex);
+    var pw = utf8Bytes(str);
+    var hLen = 32, out = [];
+    var blocks = Math.ceil((dkLen || 32) / hLen);
+    for (var b = 1; b <= blocks; b++) {
+      var idx = [(b >>> 24) & 255, (b >>> 16) & 255, (b >>> 8) & 255, b & 255];
+      var u = hmacSha256(pw, salt.concat(idx));
+      var t = u.slice();
+      for (var i = 1; i < iter; i++) {
+        u = hmacSha256(pw, u);
+        for (var j = 0; j < hLen; j++) t[j] ^= u[j];
+      }
+      for (var q = 0; q < hLen; q++) out.push(t[q] & 0xff);
+    }
+    return bytesToHex(out.slice(0, dkLen || 32));
+  }
+
+  /* ---------- хранение кодов (v5.0) ----------
+     Код задаётся в CONFIG (репозиторий) либо переопределяется на этом
+     устройстве — так тех. администратор меняет свой код без правки кода. */
+  var CODES_KEY = 'obzvon_v2_codes';
+  function localCodes() {
+    try {
+      var d = JSON.parse(localStorage.getItem(CODES_KEY) || '{}');
+      return (d && typeof d === 'object') ? d : {};
+    } catch (e) { return {}; }
+  }
+  function saveLocalCodes(obj) {
+    try { localStorage.setItem(CODES_KEY, JSON.stringify(obj)); } catch (e) {}
+  }
+  function roleCode(role) {
+    var loc = localCodes()[role];
+    if (loc && loc.hash) return loc;
+    if (role === 'admin') {
+      return { hash: CONFIG.adminHash, salt: CONFIG.adminSalt, iter: CONFIG.adminIter };
+    }
+    return { hash: CONFIG.passHash, salt: CONFIG.passSalt, iter: CONFIG.passIter };
+  }
+  /* проверка кода роли: PBKDF2 (если задана соль) либо старый sha256 */
+  function roleMatch(role, input) {
+    if (!input || !role) return false;
+    var c = roleCode(role);
+    if (!c || !c.hash) return false;
+    var want = String(c.hash).toLowerCase();
+    if (c.salt && c.iter) return pbkdf2hex(input, c.salt, c.iter, 32) === want;
+    return sha256hex(input) === want;
+  }
+  /* «слабый» код (простой sha256 без соли) — предупреждаем тех. администратора */
+  function codeIsWeak(role) {
+    var c = roleCode(role);
+    return !!(c && c.hash && !(c.salt && c.iter));
+  }
+  function passMatch(input) { return roleMatch('curator', input); }
   var els = {};
   ['sessionId','sessionTimer','statusBadge','btnSound','curatorHead','curatorBody','curatorCaret',
    'passInput','btnAuth','authRow','authHint','ctrlRow','btnStart','btnPause','btnEnd','btnFs',
@@ -142,7 +261,10 @@
     'healthGrid','healthScore','healthRepair','healthLog',
     'btnHealthCheck','btnHealthRepair','btnHealthReport','btnHealthClear','btnHealthRestart',
     'adminGate','adminBody','adminPass','btnAdminAuth','btnAdminLock','adminUpdateInfo',
-    'btnAdminCheck','btnAdminUpdate','btnAdminStress','btnAdminStressSmall','btnAdminPurge','adminStress','adminLock']
+    'btnAdminCheck','btnAdminUpdate','btnAdminStress','btnAdminStressSmall','btnAdminPurge','adminStress','adminLock',
+    'btnAuthAdmin','adminRoles','adminWatch','adminAudit','adminBuildInfo','adminCfgInfo',
+    'adminNewCode','btnAdminRotate','btnAdminResetCode','btnAdminRefresh','btnAdminDump','btnAdminCfg','btnAdminAuditClear',
+    'adminCodeExport']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- реестр слушателей и таймеров (v4.2) ----------
@@ -178,6 +300,7 @@
   var ST = {
     state: 'idle',          // idle | calib | running | paused | locked | ended
     authed: false,
+    role: null,            // кто за пультом: null | 'curator' | 'admin'
     calibrated: false,
     calibDone: 0,
     sessionId: null,
@@ -196,6 +319,20 @@
 
   /* ---------- утилиты ---------- */
   function rnd(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  /* криптостойкие случайные байты (соль для кодов) */
+  function randomBytes(n) {
+    var out = new Array(n), i;
+    try {
+      if (window.crypto && window.crypto.getRandomValues) {
+        var buf = new Uint8Array(n);
+        window.crypto.getRandomValues(buf);
+        for (i = 0; i < n; i++) out[i] = buf[i];
+        return out;
+      }
+    } catch (e) {}
+    for (i = 0; i < n; i++) out[i] = Math.floor(Math.random() * 256);
+    return out;
+  }
   function fmt(ms) {
     var s = Math.floor(ms / 1000), h = Math.floor(s / 3600);
     var m = Math.floor((s % 3600) / 60);
@@ -843,6 +980,7 @@
     els.btnStart.disabled = true; els.btnPause.disabled = false; els.btnEnd.disabled = false;
     if (els.chkFsReq.checked) goFullscreen();
     feedAdd({ time: ts(), label: 'Обзвон начат · сессия ' + ST.sessionId, sev: 0 });
+    if (window.Audit) Audit.log('session.start', 'сессия ' + ST.sessionId);
     toast('Обзвон начат. Испытания будут появляться каждые 10–25 секунд', 'good');
     beep(660, 200, 'sine', .05);
     CH_SEANCE = 1;
@@ -865,6 +1003,7 @@
     els.btnPause.disabled = true; els.btnResume.disabled = false;
     els.btnPauseSelf.textContent = '▶ Продолжить';
     els.btnPauseSelf.disabled = false;
+    if (window.Audit) Audit.log('session.pause', 'пауза · сессия ' + ST.sessionId);
     saveState();
   }
 
@@ -879,6 +1018,7 @@
     els.btnPause.disabled = false;
     els.btnPauseSelf.textContent = '⏸ Пауза';
     feedAdd({ time: ts(), label: 'Обзвон продолжен', sev: 0 });
+    if (window.Audit) Audit.log('session.resume', 'продолжение · сессия ' + ST.sessionId);
     scheduleNext();
     saveState();
   }
@@ -900,6 +1040,7 @@
     els.chTarget.hidden = true;
     setBadge('блокировка', 'badge-lock');
     sndAlarm();
+    if (window.Audit) Audit.log('session.lock', 'автоблокировка · читомеряк ' + Monitor.cheatPercent() + '%');
     var v = Monitor.state.viol.slice(-3).map(function (x) { return '· ' + x.label; }).join('\n');
     els.lockText.textContent = '«Читомеряк» достиг ' + Monitor.cheatPercent() + '% (порог ' + ST.threshold + '%). Последние события:\n' + v;
     els.lockText.style.whiteSpace = 'pre-line';
@@ -1000,6 +1141,7 @@
     if (verdict === 'ЗАЧЁТ') sndGood(); else sndBad();
     toast('Средняя концентрация обновлена: ' + totAvg + '%', 'good', 4200);
     feedAdd({ time: ts(), label: 'Обзвон завершён · вердикт: ' + verdict + ' · ср. концентрация ' + totAvg + '% · фишек: ' + achList.length, sev: verdict === 'ЗАЧЁТ' ? 0 : 2 });
+    if (window.Audit) Audit.log('session.end', 'вердикт ' + verdict + ' · концентрация ' + totAvg + '%');
     clearState();
   }
 
@@ -1025,6 +1167,7 @@
     els.feedCount.textContent = '0';
     updateWatermark();
     updateMetrics();
+    if (window.Audit) Audit.log('session.reset', 'сброс сессии');
     toast('Сессия сброшена', 'good');
   }
 
@@ -1279,7 +1422,9 @@
     /* обзвон шёл и страницу перезагрузили — это нарушение */
     ST.state = 'running';
     ST.hadReload = true;   /* для фишки «ВОЗВРАЩЕНИЕ» */
-    ST.authed = true; ST.calibrated = true;
+    /* права НЕ выдаются: после перезагрузки панель куратора снова закрыта,
+       вход — только по коду (v5.0 закрывает дыру с выдачей прав) */
+    ST.authed = false; ST.role = null; ST.calibrated = true;
     ST.sessionId = d.sessionId;
     ST.sessionStartAt = d.sessionStartAt || 0;
     ST.startedAt = d.elapsed || 0; ST.runSince = Date.now();
@@ -1289,19 +1434,20 @@
     FEED = d.feed || [];
     els.signalList.innerHTML = '';
     feedRebuild();
-    els.authRow.hidden = true; els.ctrlRow.hidden = false; els.authHint.hidden = true;
+    els.authRow.hidden = false; els.ctrlRow.hidden = true; els.authHint.hidden = false;
     els.sessionId.textContent = 'сессия ' + ST.sessionId;
     els.sessionStart.textContent = ST.sessionStartAt ? 'старт ' + fmtClock(ST.sessionStartAt) + ' (восстановлена)' : 'старт — неизвестен';
     setBadge('идёт', 'badge-run');
     updateWatermark();
     els.gate.hidden = true; els.playfield.hidden = false; els.partPanel.hidden = false;
     els.btnPauseSelf.textContent = '⏸ Пауза';
-    els.btnStart.disabled = true; els.btnPause.disabled = false; els.btnEnd.disabled = false;
-    Monitor.reset();
-    var S = Monitor.state;
-    S.score = d.score || 0; S.viol = d.viol || []; S.tabSwitches = d.tabSwitches || 0;
-    S.focusLosses = d.focusLosses || 0; S.idleHits = d.idleHits || 0;
-    S.missChallenges = d.missChallenges || 0; S.reactions = d.reactions || []; S.screens = d.screens || 1;
+    els.btnStart.disabled = true; els.btnPause.disabled = true; els.btnEnd.disabled = true;
+    /* состояние монитора восстанавливаем через API — наружу отдаётся копия */
+    Monitor.restore({
+      score: d.score || 0, viol: d.viol || [], tabSwitches: d.tabSwitches || 0,
+      focusLosses: d.focusLosses || 0, idleHits: d.idleHits || 0,
+      missChallenges: d.missChallenges || 0, reactions: d.reactions || [], screens: d.screens || 1
+    });
     Monitor.setRunning(true);
     /* обновление, применённое системой, — не перезагрузка, наказания нет */
     var cleanUpdate = false;
@@ -1319,8 +1465,7 @@
     }
     if (tampered) {
       ST.integrityOk = false;
-      S.score += 20;
-      S.viol.push({ t: Date.now(), type: 'tamper', label: 'Подмена сохранённых данных сессии (подпись не совпала)', weight: 20 });
+      Monitor.addTamper('Подмена сохранённых данных сессии (подпись не совпала)', 20);
       feedAdd({ time: ts(), label: 'Подмена данных сессии — подпись не совпала (+20)', sev: 2 });
       toast('Обнаружена подмена данных сессии! +20 к «читомеряку»', 'bad', 6000);
     }
@@ -1433,39 +1578,70 @@
     els.curatorCaret.classList.toggle('open', open);
   });
 
-  on(els.btnAuth, 'click', doAuth);
-  on(els.passInput, 'keydown', function (e) { if (e.key === 'Enter') doAuth(); });
+  on(els.btnAuth, 'click', function () { doAuth('curator'); });
+  if (els.btnAuthAdmin) on(els.btnAuthAdmin, 'click', function () { doAuth('admin'); });
+  on(els.passInput, 'keydown', function (e) { if (e.key === 'Enter') doAuth('curator'); });
 
-  /* защита от перебора кода */
-  var authFails = 0, authLockedUntil = 0;
-  function authLocked() { return Date.now() < authLockedUntil; }
-
-  function doAuth() {
-    if (authLocked()) {
-      toast('Слишком много неверных попыток — ввод заблокирован на ' +
-        Math.ceil((authLockedUntil - Date.now()) / 1000) + ' с', 'bad');
-      return;
-    }
-    if (passMatch(els.passInput.value)) {
-      authFails = 0;
-      ST.authed = true;
-      els.authRow.hidden = true; els.ctrlRow.hidden = false; els.authHint.hidden = true;
-      toast('Пульт куратора разблокирован', 'good');
-      if (ST.calibrated) els.btnStart.disabled = false;
+  /* ---------- коды доступа (v5.0) ----------
+     У каждого входа свой счётчик неудачных попыток: неверный код в одном
+     месте не блокирует легитимный вход в другом (раньше счётчик был
+     общий — участник мог «залочить» куратора). */
+  function makeGate() { return { fails: 0, until: 0 }; }
+  var GATES = { curator: makeGate(), admin: makeGate(), unlock: makeGate() };
+  function gateLocked(g) { return Date.now() < g.until; }
+  function gateLeft(g) { return Math.max(0, Math.ceil((g.until - Date.now()) / 1000)); }
+  function gateFail(g, label) {
+    g.fails++;
+    var left = CONFIG.authFailsLimit - g.fails;
+    if (left <= 0) {
+      g.until = Date.now() + CONFIG.authLockMs;
+      g.fails = 0;
+      toast('Неверный код! Ввод заблокирован на ' + Math.round(CONFIG.authLockMs / 1000) + ' секунд', 'bad', 4000);
     } else {
-      authFails++;
-      var left = CONFIG.authFailsLimit - authFails;
-      if (left <= 0) {
-        authLockedUntil = Date.now() + CONFIG.authLockMs;
-        authFails = 0;
-        toast('Неверный код! Ввод заблокирован на 30 секунд', 'bad', 4000);
-      } else {
-        toast('Неверный код доступа · осталось попыток: ' + left, 'bad');
+      toast('Неверный код доступа · осталось попыток: ' + left, 'bad');
+    }
+    if (window.Audit) Audit.log('auth.fail', label + ' · неверный код');
+  }
+  function isAdmin() { return ST.role === 'admin'; }
+
+  /* открыть пульт под ролью */
+  function grantRole(role) {
+    ST.authed = true;
+    ST.role = role;
+    els.authRow.hidden = true;
+    els.ctrlRow.hidden = false;
+    els.authHint.hidden = true;
+    if (ST.calibrated) els.btnStart.disabled = false;
+  }
+  function doAuth(role) {
+    role = role || 'curator';
+    var g = GATES[role === 'admin' ? 'admin' : 'curator'];
+    var input = els.passInput.value;
+    if (gateLocked(g)) {
+      toast('Слишком много неверных попыток — ввод заблокирован на ' + gateLeft(g) + ' с', 'bad');
+      return false;
+    }
+    if (roleMatch(role, input)) {
+      g.fails = 0;
+      grantRole(role);
+      toast(role === 'admin' ? 'Пульт открыт: тех. администратор' : 'Пульт куратора разблокирован', 'good');
+      if (window.Audit) Audit.log('auth.ok', 'вход в пульт: ' + (ROLES[role] ? ROLES[role].title : role));
+      if (role === 'admin') {
+        admin.authed = true;
+        adminRender();
+        if (window.Health) Health.check();
       }
       els.passInput.value = '';
-      document.querySelector('.curator-panel').classList.add('shake');
-      setTimeout(function () { document.querySelector('.curator-panel').classList.remove('shake'); }, 400);
+      return true;
     }
+    gateFail(g, 'пульт · ' + role);
+    els.passInput.value = '';
+    var panel = document.querySelector('.curator-panel');
+    if (panel) {
+      panel.classList.add('shake');
+      setTimeout(function () { panel.classList.remove('shake'); }, 400);
+    }
+    return false;
   }
 
   on(els.btnStart, 'click', startSession);
@@ -1482,6 +1658,12 @@
       tmr = setTimeout(function () { taps = 0; }, 2200);
       if (taps >= need) {
         taps = 0; clearTimeout(tmr);
+        /* v5.0: обход калибровки — только тех. администрателю.
+           Раньше достаточно было 5 кликов по логотипу любому участнику. */
+        if (!isAdmin()) {
+          if (window.Audit) Audit.log('calib.bypass.denied', 'попытка обхода калибровки без прав администратора');
+          return;
+        }
         ST.calibrated = true;
         ST.calibDone = CONFIG.calibCount;
         ST.baseReaction = ST.baseReaction || 400;
@@ -1555,28 +1737,25 @@
   });
 
   on(els.btnUnlock, 'click', function () {
-    if (authLocked()) {
-      toast('Слишком много неверных попыток — подождите', 'bad');
+    if (gateLocked(GATES.unlock)) {
+      toast('Слишком много неверных попыток — подождите ' + gateLeft(GATES.unlock) + ' с', 'bad');
       return;
     }
-    if (passMatch(els.unlockInput.value)) {
+    var inp = els.unlockInput.value;
+    var who = roleMatch('curator', inp) ? 'curator' : (roleMatch('admin', inp) ? 'admin' : null);
+    if (who) {
+      GATES.unlock.fails = 0;
       ST.state = 'running'; ST.runSince = Date.now();
       ST.relockBase = Monitor.cheatPercent();
       Monitor.setRunning(true);
       els.lockOverlay.hidden = true;
       setBadge('идёт', 'badge-run');
-      feedAdd({ time: ts(), label: 'Блокировка снята куратором', sev: 0 });
+      feedAdd({ time: ts(), label: 'Блокировка снята (' + (ROLES[who] ? ROLES[who].title : who) + ')', sev: 0 });
       toast('Блокировка снята. «Читомеряк» сохранён', 'good');
+      if (window.Audit) Audit.log('session.unlock', 'снятие блокировки участника');
       scheduleNext();
     } else {
-      authFails++;
-      if (CONFIG.authFailsLimit - authFails <= 0) {
-        authLockedUntil = Date.now() + CONFIG.authLockMs;
-        authFails = 0;
-        toast('Неверный код! Ввод заблокирован на 30 секунд', 'bad', 4000);
-      } else {
-        toast('Неверный код', 'bad');
-      }
+      gateFail(GATES.unlock, 'снятие блокировки');
       els.unlockInput.value = '';
     }
   });
@@ -1843,7 +2022,7 @@
      обзвон не прерывается. Если что-то пошло не так — есть запасной
      вариант с обычной перезагрузкой. */
   var MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
-                 'js/archive.js', 'js/health.js', 'js/app.js'];
+                 'js/archive.js', 'js/audit.js', 'js/health.js', 'js/app.js'];
 
   function fallbackReload(v) {
     try {
@@ -1961,6 +2140,8 @@
         Monitor.penalty ? Monitor.penalty.toString() : '',
         (window.Live && window.Live.sample) ? window.Live.sample.toString() : '',
         (window.Archive && window.Archive.add) ? window.Archive.add.toString() : '',
+        (window.Audit && window.Audit.log) ? window.Audit.log.toString() : '',
+        (window.Health && window.Health.check) ? window.Health.check.toString() : '',
         (window.Monitor && window.Monitor.guards) ? window.Monitor.guards.detectAutomation.toString() : ''
       ].join('|'));
     } catch (e) { return ''; }
@@ -2045,6 +2226,118 @@
     }
   }, 5000);
 
+  /* ============================================================
+     УДАРЁННАЯ КОНФИГУРАЦИЯ И АВТОПОДДЕРЖКА (v5.0)
+     Сайт сам подхватывает настройки и возможности из config.json —
+     автор правит JSON на сервере, перезагрузка кода не нужна.
+     status.json пишет CI на GitHub: видно, что автоподдержка жива.
+     ============================================================ */
+  var remoteCfg = { loaded: false, at: 0, raw: null, applied: [] };
+  var buildStatus = null;
+
+  function applyRemoteNews(items) {
+    var list = document.querySelector('#newsPanel .news-list');
+    if (!list || !items || !items.length) return 0;
+    var n = 0;
+    items.slice(0, 10).forEach(function (it) {
+      if (!it || !it.title) return;
+      var art = document.createElement('article');
+      art.className = 'news-item news-new';
+      art.innerHTML = '<div class="news-ver">v' + esc(it.v || CONFIG.appVersion) + '</div>' +
+        '<div class="news-body"><h3>' + esc(it.title) + '</h3><p>' + esc(it.text || '') + '</p></div>';
+      list.insertBefore(art, list.firstChild);
+      n++;
+    });
+    return n;
+  }
+
+  function applyRemoteConfig(cfg) {
+    var applied = [];
+    if (!cfg || typeof cfg !== 'object') return applied;
+    if (typeof cfg.threshold === 'number' && cfg.threshold >= 10 && cfg.threshold <= 100) {
+      ST.threshold = cfg.threshold;
+      if (els.selThreshold) els.selThreshold.value = String(cfg.threshold);
+      applied.push('порог доверия ' + cfg.threshold + '%');
+    }
+    if ([6, 10, 20, 50, 100].indexOf(cfg.calibCount) >= 0) {
+      CONFIG.calibCount = cfg.calibCount;
+      if (els.selCalib) els.selCalib.value = String(cfg.calibCount);
+      syncCalibBtn();
+      applied.push('калибровка ' + cfg.calibCount + ' испытаний');
+    }
+    if (typeof cfg.idleLimit === 'number' && cfg.idleLimit >= 10000) {
+      CONFIG.idleLimit = cfg.idleLimit;
+      applied.push('простой ' + Math.round(cfg.idleLimit / 1000) + ' с');
+    }
+    if (cfg.features && typeof cfg.features === 'object') {
+      Object.keys(cfg.features).forEach(function (k) {
+        if (Object.prototype.hasOwnProperty.call(CONFIG.features, k)) {
+          CONFIG.features[k] = !!cfg.features[k];
+          applied.push('возможность ' + k + ' — ' + (cfg.features[k] ? 'включена' : 'выключена'));
+        }
+      });
+      if (window.Monitor && Monitor.setStrict) Monitor.setStrict(!!CONFIG.features.strict);
+    }
+    if (typeof cfg.banner === 'string' && cfg.banner) {
+      applied.push('объявление на странице');
+      toast(cfg.banner, '', 7000);
+    }
+    if (Array.isArray(cfg.news) && cfg.news.length) {
+      var n = applyRemoteNews(cfg.news);
+      if (n) applied.push('новостей: ' + n);
+    }
+    return applied;
+  }
+
+  function loadRemoteConfig(manual) {
+    if (location.protocol === 'file:' || !window.fetch) {
+      if (manual) toast('Конфигурация доступна только при раздаче по http', '');
+      return Promise.resolve(null);
+    }
+    return fetch(CONFIG.configUrl + '?ts=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) { if (manual) toast('Файл конфигурации не найден', ''); return null; }
+        remoteCfg.loaded = true;
+        remoteCfg.at = Date.now();
+        remoteCfg.raw = d;
+        remoteCfg.applied = applyRemoteConfig(d);
+        if (manual) {
+          toast(remoteCfg.applied.length
+            ? ('Применено из конфигурации: ' + remoteCfg.applied.join(', '))
+            : 'Конфигурация прочитана — изменений нет', 'good');
+        }
+        if (window.Audit) Audit.log('config.applied', remoteCfg.applied.join(', ') || 'без изменений');
+        adminCfgRender();
+        return d;
+      })
+      .catch(function () {
+        if (manual) toast('Не удалось прочитать конфигурацию (нет связи)', '');
+        return null;
+      });
+  }
+
+  function loadBuildStatus(manual) {
+    if (location.protocol === 'file:' || !window.fetch) {
+      if (manual) toast('Статус сборки доступен только при раздаче по http', '');
+      return Promise.resolve(null);
+    }
+    return fetch(CONFIG.statusUrl + '?ts=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        buildStatus = d;
+        adminBuildRender();
+        if (manual) {
+          toast(d ? ('Автоподдержка: ' + (d.result || 'ok') + ' · версия ' + (d.v || '—'))
+            : 'Файл статуса не найден', d ? 'good' : '');
+        }
+        return d;
+      })
+      .catch(function () {
+        if (manual) toast('Не удалось прочитать статус сборки', '');
+        return null;
+      });
+  }
   /* ---------- история применённых версий (v4.3) ----------
      Сайт записывает, какие версии он применял и когда. После
      фонового обновления в этом списке видно переход — это
@@ -2082,35 +2375,44 @@
     /* блокировка пункта меню до входа */
     var link = document.querySelector('.nav-link[data-view="health"]');
     if (link) link.classList.toggle('locked', !admin.authed);
-    if (admin.authed) adminUpdateInfo();
+    if (admin.authed) {
+      adminUpdateInfo();
+      adminWatchRender();
+      adminAuditRender();
+      adminBuildRender();
+      adminCfgRender();
+    }
+    /* строка роли: кто сейчас за пультом */
+    if (els.adminRoles) {
+      var who = ST.role ? (ROLES[ST.role] ? ROLES[ST.role].title : ST.role) : 'не определена';
+      var weak = codeIsWeak('curator') ? ' · <span class="warn-text">код куратора сохранён как простой sha256 — усилите через node tools/passgen.js</span>' : '';
+      els.adminRoles.innerHTML = 'роль: <b>' + esc(who) + '</b>' +
+        (admin.authed ? ' · админка открыта' : '') + weak;
+    }
   }
-
   function adminToast(msg, cls) { toast(msg, cls || ''); }
 
   function adminAuth() {
-    if (authLocked()) {
-      adminToast('Слишком много неверных попыток — ввод заблокирован', 'bad');
-      return;
+    if (gateLocked(GATES.admin)) {
+      adminToast('Слишком много неверных попыток — ввод заблокирован на ' + gateLeft(GATES.admin) + ' с', 'bad');
+      return false;
     }
-    if (passMatch(els.adminPass.value)) {
-      authFails = 0;
+    /* v5.0: в админку — только код ТЕХ. АДМИНИСТРАТОРА.
+       Код куратора сюда больше не подходит. */
+    if (roleMatch('admin', els.adminPass.value)) {
+      GATES.admin.fails = 0;
       admin.authed = true;
+      grantRole('admin');
       els.adminPass.value = '';
+      if (window.Audit) Audit.log('admin.open', 'вход в админку');
       adminRender();
-      adminToast('Админка открыта', 'good');
+      adminToast('Админка открыта: тех. администратор', 'good');
       if (window.Health) Health.check();
-    } else {
-      authFails++;
-      var left = CONFIG.authFailsLimit - authFails;
-      if (left <= 0) {
-        authLockedUntil = Date.now() + CONFIG.authLockMs;
-        authFails = 0;
-        adminToast('Неверный код! Ввод заблокирован на ' + Math.round(CONFIG.authLockMs / 1000) + ' с', 'bad', 4000);
-      } else {
-        adminToast('Неверный код доступа · осталось попыток: ' + left, 'bad');
-      }
-      els.adminPass.value = '';
+      return true;
     }
+    gateFail(GATES.admin, 'админка');
+    els.adminPass.value = '';
+    return false;
   }
 
   function adminLock() {
@@ -2149,6 +2451,148 @@
                    : ('Обновление отложено до конца текущего испытания'), 'good');
   }
 
+  /* ---------- надзор: живое состояние (v5.0) ---------- */
+  function adminWatchRender() {
+    if (!els.adminWatch || !admin.authed) return;
+    var S = Monitor.state;
+    var br = domIntegrity();
+    var ar = Monitor.avgReaction();
+    var rows = [
+      ['СЕССИЯ', ST.state + (ST.sessionId ? ' · ' + ST.sessionId : '') + ' · ' + fmt(elapsed())],
+      ['МЕТРИКИ', 'концентрация ' + Monitor.concentration() + '% · читомеряк ' + Monitor.cheatPercent() + '% · нарушений ' + S.viol.length],
+      ['МОНИТОР', 'вкладок ' + S.tabSwitches + ' · срывов фокуса ' + S.focusLosses + ' · экранов ' + S.screens +
+        ' · копирований ' + S.copyAttempts + ' · блок. клавиш ' + S.blockedKeys + ' · перезагрузок ' + S.reloadTries],
+      ['ИСПЫТАНИЯ', 'в журнале ' + CH_LOG.length + ' · провалов ' + S.missChallenges +
+        ' · средняя реакция ' + (ar === null ? '—' : ar + ' мс')],
+      ['ЦЕЛОСТНОСТЬ', (br ? 'СТРУКТУРА НАРУШЕНА: ' + br : 'структура в порядке') +
+        ' · ' + (ST.integrityOk ? 'подпись в порядке' : 'ПОДПИСЬ НАРУШЕНА')],
+      ['СТОРОЖ', 'проверок ' + watchdog.checks + ' · починок ' + watchdog.repairs +
+        (watchdog.lastRepair ? ' · последняя: ' + watchdog.lastRepair : '')],
+      ['ВЕРСИЯ', 'установлена ' + CONFIG.appVersion +
+        (upd.found ? ' · доступна ' + upd.found : ' · обновлений нет')],
+      ['ПАМЯТЬ', (memStats().pageMB !== null ? memStats().pageMB.toFixed(1) + ' МБ страницы' : 'память недоступна') +
+        ' · localStorage ' + (lsSizeKB() !== null ? lsSizeKB() + ' КБ' : '—')]
+    ];
+    els.adminWatch.innerHTML = rows.map(function (r) {
+      return '<div class="watch-row"><span>' + esc(r[0]) + '</span><b>' + esc(String(r[1])) + '</b></div>';
+    }).join('');
+  }
+
+  /* ---------- журнал действий (v5.0) ---------- */
+  function adminAuditRender() {
+    if (!els.adminAudit) return;
+    var items = window.Audit ? Audit.list().slice(-40).reverse() : [];
+    if (!items.length) {
+      els.adminAudit.innerHTML = '<li class="hl-empty">действий пока нет</li>';
+      return;
+    }
+    els.adminAudit.innerHTML = items.map(function (it) {
+      var d = new Date(it.t);
+      function p(n) { return ('0' + n).slice(-2); }
+      return '<li class="hl-' + (it.role === 'admin' ? 'info' : 'warn') + '">' +
+        '<time>' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '</time>' +
+        '<b>' + esc(it.role) + '</b> · ' + esc(it.action) +
+        (it.detail ? ' — ' + esc(it.detail) : '') + '</li>';
+    }).join('');
+  }
+
+  /* ---------- состояние автоподдержки (v5.0) ---------- */
+  function adminBuildRender() {
+    if (!els.adminBuildInfo) return;
+    if (!buildStatus) {
+      els.adminBuildInfo.innerHTML = 'статус автоподдержки ещё не получен' +
+        (location.protocol === 'file:' ? ' (только при раздаче по http)' : '');
+      return;
+    }
+    var d = buildStatus;
+    els.adminBuildInfo.innerHTML =
+      'последний прогон: <b>' + esc(String(d.result || 'ok')) + '</b>' +
+      (d.at ? ' · ' + esc(String(d.at)) : '') +
+      (d.v ? ' · версия <b>v' + esc(String(d.v)) + '</b>' : '') +
+      (d.commit ? ' · коммит <b>' + esc(String(d.commit).slice(0, 7)) + '</b>' : '') +
+      (d.notes ? '<br><span class="dim2">' + esc(String(d.notes)) + '</span>' : '');
+  }
+
+  function adminCfgRender() {
+    if (!els.adminCfgInfo) return;
+    if (!remoteCfg.loaded) {
+      els.adminCfgInfo.innerHTML = 'конфигурация ещё не загружена' +
+        (location.protocol === 'file:' ? ' (только при раздаче по http)' : '');
+      return;
+    }
+    els.adminCfgInfo.innerHTML = 'прочитано · применено: ' +
+      (remoteCfg.applied.length ? esc(remoteCfg.applied.join(', ')) : 'без изменений');
+  }
+
+  /* ---------- смена кода администратора (v5.0) ---------- */
+  function adminRotateCode() {
+    var code = els.adminNewCode ? els.adminNewCode.value : '';
+    if (!code || code.length < 8) {
+      adminToast('Код слишком короткий — минимум 8 символов', 'bad');
+      return false;
+    }
+    var salt = bytesToHex(randomBytes(16));
+    var hash = pbkdf2hex(code, salt, 150000, 32);
+    var codes = localCodes();
+    codes.admin = { hash: hash, salt: salt, iter: 150000 };
+    saveLocalCodes(codes);
+    if (els.adminNewCode) els.adminNewCode.value = '';
+    if (els.adminCodeExport) {
+      els.adminCodeExport.value =
+        "    adminHash: '" + hash + "',\r\n" +
+        "    adminSalt: '" + salt + "',\r\n" +
+        "    adminIter: 150000,";
+    }
+    adminToast('Новый код сохранён в этом браузере. Чтобы он действовал на всех устройствах — вставьте строки ниже в CONFIG (js/app.js)', 'good');
+    if (window.Audit) Audit.log('admin.code.rotate', 'код администратора изменён на этом устройстве');
+    return true;
+  }
+
+  function adminResetCode() {
+    var codes = localCodes();
+    if (!codes.admin) { adminToast('Код на этом устройстве и так взят из репозитория', ''); return; }
+    delete codes.admin;
+    saveLocalCodes(codes);
+    adminToast('Код возвращён к значению из репозитория', 'good');
+    if (window.Audit) Audit.log('admin.code.reset', 'код администратора возвращён к репозиторию');
+  }
+
+  /* ---------- сводный отчёт (v5.0) ---------- */
+  function adminDump() {
+    var data = {
+      app: 'obzvon-overview',
+      generatedAt: new Date().toISOString(),
+      version: CONFIG.appVersion,
+      role: ST.role,
+      session: {
+        state: ST.state, id: ST.sessionId, elapsed: elapsed(),
+        concentration: Monitor.concentration(), cheat: Monitor.cheatPercent(),
+        violations: Monitor.state.viol.length
+      },
+      monitor: {
+        tabSwitches: Monitor.state.tabSwitches, focusLosses: Monitor.state.focusLosses,
+        screens: Monitor.state.screens, copyAttempts: Monitor.state.copyAttempts,
+        blockedKeys: Monitor.state.blockedKeys, reloadTries: Monitor.state.reloadTries,
+        missChallenges: Monitor.state.missChallenges, devtools: Monitor.state.devtools
+      },
+      integrity: { ok: ST.integrityOk, dom: domIntegrity(), fingerprint: codeFingerprint() },
+      watchdog: { checks: watchdog.checks, repairs: watchdog.repairs, last: watchdog.lastRepair },
+      updates: { installed: CONFIG.appVersion, available: upd.found, applied: appliedUpdates() },
+      build: buildStatus,
+      config: remoteCfg.raw,
+      health: window.Health ? Health.last() : null,
+      audit: window.Audit ? Audit.report() : null,
+      device: CONFIG.features.collectDevice ? Monitor.detect() : null
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'obzvon-overview-' + (ST.sessionId || 'system') + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    adminToast('Сводный отчёт сохранён', 'good');
+    if (window.Audit) Audit.log('admin.dump', 'выгрузка сводного отчёта');
+  }
   /* ---------- локальный стресс-тест (нагрузка внутри страницы) ---------- */
   function adminStressTest(n) {
     n = n || 20000;
@@ -2199,6 +2643,22 @@
   if (els.btnAdminUpdate) on(els.btnAdminUpdate, 'click', adminApplyUpdate);
   if (els.btnAdminStress) on(els.btnAdminStress, 'click', function () { adminStressTest(20000); });
   if (els.btnAdminStressSmall) on(els.btnAdminStressSmall, 'click', function () { adminStressTest(5000); });
+  if (els.btnAdminRefresh) on(els.btnAdminRefresh, 'click', function () {
+    adminWatchRender(); adminAuditRender(); adminBuildRender(); adminCfgRender();
+    loadBuildStatus(false); loadRemoteConfig(false);
+    adminToast('Надзор обновлён', 'good');
+  });
+  if (els.btnAdminCfg) on(els.btnAdminCfg, 'click', function () { loadRemoteConfig(true); });
+  if (els.btnAdminDump) on(els.btnAdminDump, 'click', adminDump);
+  if (els.btnAdminRotate) on(els.btnAdminRotate, 'click', adminRotateCode);
+  if (els.btnAdminResetCode) on(els.btnAdminResetCode, 'click', adminResetCode);
+  if (els.btnAdminAuditClear) on(els.btnAdminAuditClear, 'click', function () {
+    if (window.Audit) { Audit.clear(); adminAuditRender(); }
+    adminToast('Журнал действий очищен', 'good');
+  });
+  /* живой надзор: обновляем раз в секунду, пока админка открыта */
+  every(1000, function () { if (admin.authed) adminWatchRender(); });
+  every(5000, function () { if (admin.authed) adminAuditRender(); });
   if (els.btnAdminPurge) on(els.btnAdminPurge, 'click', function () {
     if (typeof window.confirm === 'function' && !/jsdom/i.test(navigator.userAgent || '')) {
       try { if (window.confirm('Удалить статистику, историю и состояние сессии? Действие необратимо.') === false) return; } catch (e) {}
@@ -2207,6 +2667,7 @@
     try { localStorage.removeItem('obzvon_v2_history'); } catch (e2) {}
     try { localStorage.removeItem(CONFIG.storageKey); } catch (e3) {}
     if (window.Archive) Archive.clear();
+    if (window.Audit) Audit.log('admin.purge', 'очистка хранилища');
     adminToast('Хранилище очищено', 'good');
     if (window.Health) Health.check();
   });
@@ -2224,7 +2685,18 @@
     integrity: function () { return domIntegrity(); },
     fingerprint: function () { return codeFingerprint(); },
     guard: function () { codeGuard(); },
-    update: function (v) { showUpdateBanner(v || 'next'); },
+    /* кто сейчас за пультом: null | 'curator' | 'admin' */
+    role: function () { return ST.role; },
+    /* конфигурация, применённая из config.json */
+    config: function () { return remoteCfg.raw; },
+    /* журнал действий */
+    audit: function () { return window.Audit ? Audit.list() : []; },
+    /* обновление — только тех. администратору (раньше было доступно всем) */
+    update: function (v) {
+      if (!admin.authed) { toast('Нужен код тех. администратора', 'bad'); return false; }
+      showUpdateBanner(v || 'next');
+      return true;
+    },
     /* починка на уровне приложения (вызывается модулем здоровья) */
     selfRepair: function (what) {
       var acts = [];
@@ -2249,9 +2721,13 @@
     admin: function () { return { authed: admin.authed, latest: upd.found, notes: upd.notes, applying: upd.applying }; },
     adminAuth: adminAuth,
     adminStress: adminStressTest,
-    applyUpdate: applyUpdate,
+    applyUpdate: function () {
+      if (!admin.authed) { toast('Нужен код тех. администратора', 'bad'); return false; }
+      return applyUpdate();
+    },
     /* перезапуск системы: освобождаем ресурсы и поднимаемся заново (v4.1) */
     restart: function () {
+      if (!admin.authed && !ST.authed) { toast('Нужен код доступа', 'bad'); return false; }
       try { saveState(); } catch (e) {}
       try { if (window.Monitor && Monitor.stop) Monitor.stop(); } catch (e2) {}
       try { if (window.Live && Live.stop) Live.stop(); } catch (e3) {}
@@ -2262,11 +2738,15 @@
     }
   };
 
+  if (window.Audit) Audit.init();
   updateMetrics();
   updateTotalConcUI();
   restoreState();
   updateWatermark();
   noteAppliedVersion(CONFIG.appVersion);
+  /* конфигурация и статус автоподдержки подтягиваются сами */
+  loadRemoteConfig(false);
+  loadBuildStatus(false);
   /* экземпляр поднялся — значит обновление уже применено: баннер закрываем,
      а метка версии приводится в соответствие с реально загруженным кодом */
   if (els.verBadge) els.verBadge.textContent = 'ВЕРСИЯ ' + CONFIG.appVersion;

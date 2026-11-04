@@ -10,7 +10,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=4.9" />
+  <link rel="stylesheet" href="css/styles.css?v=5.0" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -36,7 +36,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 4.9</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 5.0</div>
         </div>
       </div>
 
@@ -50,7 +50,7 @@
         <a class="nav-link" href="#view-feed" data-view="feed"><i>📜</i><span>Журнал</span></a>
         <a class="nav-link" href="#view-news" data-view="news"><i>📣</i><span>Новости</span></a>
         <a class="nav-link" href="#view-help" data-view="help"><i>❓</i><span>Справка</span></a>
-        <a class="nav-link" href="#view-health" data-view="health"><i>🛠</i><span>Админка</span><b class="nav-lock" id="adminLock" title="Требуется код куратора">🔒</b></a>
+        <a class="nav-link" href="#view-health" data-view="health"><i>🛠</i><span>Админка</span><b class="nav-lock" id="adminLock" title="Требуется код тех. администратора">🔒</b></a>
       </nav>
 
       <div class="side-foot">
@@ -190,7 +190,8 @@
             <div class="panel-body" id="curatorBody" hidden>
               <div class="auth-row" id="authRow">
                 <input type="password" id="passInput" class="input" placeholder="код доступа" autocomplete="off" />
-                <button type="button" class="btn btn-ghost" id="btnAuth">Войти</button>
+                <button type="button" class="btn btn-ghost" id="btnAuth">Войти · куратор</button>
+                <button type="button" class="btn btn-ghost" id="btnAuthAdmin">Войти · админ</button>
               </div>
 
               <div class="ctrl-row" id="ctrlRow" hidden>
@@ -222,7 +223,7 @@
                 </label>
               </div>
 
-              <div class="auth-hint" id="authHint">код доступа на странице не показывается — ввод только для куратора</div>
+              <div class="auth-hint" id="authHint">коды у куратора и тех. администратора РАЗНЫЕ; на странице они не показываются</div>
             </div>
           </section>
         </div>
@@ -362,19 +363,59 @@
                 <div class="admin-gate-card">
                   <div class="gate-icon">🛠</div>
                   <h2>АДМИНКА ЗАКРЫТА</h2>
-                  <p>Панель обслуживания системы: состояние подсистем, фоновое обновление
-                     без прерывания обзвона, авто-починка, перезапуск и локальный
-                     нагрузочный тест. Вход — по коду куратора.</p>
+                  <p>Надзор за системой: живое состояние, журнал действий, сводные отчёты,
+                     состояние автоподдержки на GitHub, смена своего кода и удалённая
+                     конфигурация. Вход — по коду ТЕХ. АДМИНИСТРАТОРА (он другой,
+                     чем у куратора).</p>
                   <div class="auth-row">
                     <input type="password" id="adminPass" class="input" placeholder="код доступа" autocomplete="off" />
                     <button type="button" class="btn btn-ghost" id="btnAdminAuth">Войти</button>
                   </div>
-                  <div class="auth-hint">код доступа на странице не показывается — только для куратора</div>
+                  <div class="auth-hint">код доступа на странице не показывается — только для тех. администратора</div>
                 </div>
               </div>
 
               <!-- содержимое админки -->
               <div id="adminBody" hidden>
+                <div class="admin-block">
+                  <div class="admin-block-title">ДОСТУП И РОЛИ</div>
+                  <div class="admin-row" id="adminRoles">роль: не определена</div>
+                  <div class="auth-row">
+                    <input type="password" id="adminNewCode" class="input" placeholder="новый код администратора (8+ символов)" autocomplete="off" />
+                    <button type="button" class="btn btn-ghost" id="btnAdminRotate">Сменить код</button>
+                  </div>
+                  <textarea id="adminCodeExport" class="code-out" readonly rows="3" placeholder="здесь появятся строки для CONFIG (js/app.js)"></textarea>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminResetCode" title="Вернуть код, заданный в репозитории">↺ Код из репозитория</button>
+                  </div>
+                  <div class="auth-hint">Новый код действует только в этом браузере (соль + PBKDF2). Чтобы он работал на всех устройствах — вставьте строки из поля выше в CONFIG (файл js/app.js).</div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">НАДЗОР</div>
+                  <div class="watch-box" id="adminWatch">—</div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminRefresh" title="Обновить надзор">⟳ Обновить</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminDump" title="Скачать сводный отчёт по системе">⬇ Сводный отчёт</button>
+                  </div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">АВТОПОДДЕРЖКА И КОНФИГУРАЦИЯ</div>
+                  <div class="admin-row" id="adminBuildInfo">—</div>
+                  <div class="admin-row" id="adminCfgInfo">—</div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminCfg" title="Перечитать config.json с сервера">⟳ Проверить конфигурацию</button>
+                  </div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">ЖУРНАЛ ДЕЙСТВИЙ</div>
+                  <ul class="health-log" id="adminAudit"></ul>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminAuditClear" title="Очистить журнал действий">⌫ Очистить журнал</button>
+                  </div>
+                </div>
                 <div class="admin-block">
                   <div class="admin-block-title">ОБНОВЛЕНИЯ</div>
                   <div class="admin-row" id="adminUpdateInfo">установлена <b>v4.2</b></div>
@@ -436,6 +477,24 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v5.0</div>
+                  <div class="news-body">
+                    <h3>Раздельные роли, надзор и самообслуживание на GitHub</h3>
+                    <p>У <b>куратора</b> и <b>тех. администратора</b> теперь разные коды
+                       и разные права: куратор ведёт обзвон, тех. администратор
+                       надзирает за системой — живое состояние, журнал действий, сводный
+                       отчёт, состояние автоподдержки, смена своего кода. Коды хранятся
+                       по PBKDF2 (соль + 150 000 итераций) — перебор опубликованного хеша
+                       становится непрактичным. Закрыты дыры: восстановление сессии после
+                       перезагрузки больше не выдаёт права куратора, обход калибровки
+                       по клику на логотип доступен только администратору, счётчики неудачных
+                       попыток разведены по входам, а данные истории экранируются.
+                       Сайт сам подхватывает настройки и новые возможности из config.json,
+                       а CI на GitHub проверяет проект, чинит известные сбои, поднимает
+                       версию и пишет status.json — видно, что автоподдержка жива.</p>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v4.9</div>
                   <div class="news-body">
                     <h3>Цвет и заметное меню</h3>
@@ -753,13 +812,14 @@
   <div class="wm-layer" id="wmLayer" aria-hidden="true"></div>
   <div class="noise" aria-hidden="true"></div>
 
-  <script src="js/fx.js?v=4.9"></script>
-  <script src="js/monitor.js?v=4.9"></script>
-  <script src="js/nav.js?v=4.9"></script>
-  <script src="js/live.js?v=4.9"></script>
-  <script src="js/archive.js?v=4.9"></script>
-  <script src="js/health.js?v=4.9"></script>
-  <script src="js/app.js?v=4.9"></script>
+  <script src="js/fx.js?v=5.0"></script>
+  <script src="js/monitor.js?v=5.0"></script>
+  <script src="js/nav.js?v=5.0"></script>
+  <script src="js/live.js?v=5.0"></script>
+  <script src="js/archive.js?v=5.0"></script>
+  <script src="js/audit.js?v=5.0"></script>
+  <script src="js/health.js?v=5.0"></script>
+  <script src="js/app.js?v=5.0"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.9 :: MONITOR  (детект нарушений + система кандидата)
+   ОБЗВОН v5.0 :: MONITOR  (детект нарушений + система кандидата)
    v4.0: авто-тесты браузера, захват экрана (WebRTC), вторая
    вкладка, подмена часов, пауза-отладчик, расширенный список
    блокируемых сочетаний.
@@ -290,6 +290,10 @@ window.Monitor = (function () {
                     'KeyT', 'KeyW', 'Equal', 'Minus', 'Digit0'];
   var BLOCK_CTRL_SHIFT = ['KeyI', 'KeyC', 'KeyJ', 'KeyN', 'KeyB', 'KeyV', 'KeyT', 'KeyW'];
   var BLOCK_TAB = true;   /* Ctrl+Tab / Ctrl+Shift+Tab — переключение вкладок */
+  /* строгий режим (v5.0, включается из config.json): блокируются ещё и
+     «открыть ссылку в новом окне», «свернуть всё», «выход из полного экрана» */
+  var STRICT = false;
+  var BLOCK_STRICT = ['KeyM', 'KeyQ', 'Escape'];
 
   function onKey(e) {
     S.lastActivity = now();
@@ -312,6 +316,13 @@ window.Monitor = (function () {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && BLOCK_CTRL.indexOf(e.code) >= 0) {
       block(e); S.blockedKeys++;
       emit('blocked', 'Заблокировано: ' + (COMBO_NAMES[e.code] || e.code), 5);
+      return;
+    }
+
+    /* строгий режим: часть сочетаний закрывается полностью */
+    if (STRICT && BLOCK_STRICT.indexOf(e.code) >= 0 && (e.ctrlKey || e.metaKey || e.altKey)) {
+      block(e); S.blockedKeys++;
+      emit('blocked', 'Заблокировано (строгий режим): ' + (COMBO_NAMES[e.code] || e.code), 5);
       return;
     }
 
@@ -596,7 +607,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-4.9',
+      version: 'OBZVON-5.0',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,
@@ -641,12 +652,54 @@ window.Monitor = (function () {
     emit('manual', label, weight, sev || 1);
   }
 
+  /* подделка сохранённых данных сессии: штраф в обход emit(),
+     потому что событие должно попасть в журнал даже после сброса */
+  function addTamper(label, weight) {
+    S.score = Math.min(150, S.score + (weight || 20));
+    S.viol.push({ t: now(), type: 'tamper', label: label, weight: weight || 20 });
+    if (cb.violation) cb.violation({ type: 'tamper', label: label, weight: weight || 20, sev: 2, time: hms(now()) });
+  }
+
+  /* восстановление состояния после перезагрузки страницы */
+  function restore(data) {
+    reset();
+    var d = data || {};
+    S.score = d.score || 0;
+    S.viol = Array.isArray(d.viol) ? d.viol.slice() : [];
+    S.tabSwitches = d.tabSwitches || 0;
+    S.focusLosses = d.focusLosses || 0;
+    S.idleHits = d.idleHits || 0;
+    S.missChallenges = d.missChallenges || 0;
+    S.reactions = Array.isArray(d.reactions) ? d.reactions.slice() : [];
+    S.screens = d.screens || 1;
+    return true;
+  }
+
+  /* строгий режим: вкл/выкл из конфигурации */
+  function setStrict(on) {
+    STRICT = !!on;
+    return STRICT;
+  }
+
+  /* состояние наружу — КОПИЯ (v5.0): участник не может подчистить
+     счётчики из консоли, потому что оригинал остаётся внутри модуля */
+  function stateCopy() {
+    var out = {};
+    for (var k in S) {
+      if (!Object.prototype.hasOwnProperty.call(S, k)) continue;
+      var v = S[k];
+      out[k] = Array.isArray(v) ? v.slice() : v;
+    }
+    return out;
+  }
+
   return {
     start: start, setRunning: setRunning, setChallengeActive: setChallengeActive,
     addReaction: addReaction, addMiss: addMiss, addReloadGuardPenalty: addReloadGuardPenalty,
     detect: detect, report: report, reset: reset, cheatPercent: cheatPercent,
     concentration: concentration, focusRatio: focusRatio, avgReaction: avgReaction,
     penalty: penalty, setBaseline: setBaseline,
+    restore: restore, addTamper: addTamper, setStrict: setStrict,
     restart: restart, stop: stop, lastTickAt: lastTickAt,
     /* защита v4.0 — наружу, чтобы проверки можно было запускать из тестов */
     guards: {
@@ -657,6 +710,7 @@ window.Monitor = (function () {
       tabHeartbeat: tabHeartbeat,
       patchGetDisplayMedia: patchGetDisplayMedia
     },
-    state: S
+    /* наружу — только копия (см. stateCopy) */
+    get state() { return stateCopy(); }
   };
 })();

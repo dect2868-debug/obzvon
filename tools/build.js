@@ -32,7 +32,7 @@ function copyDir(src, dst) {
 /* ---------- читаем исходники ---------- */
 let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'css', 'styles.css'), 'utf8');
-const scripts = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/health.js', 'js/app.js']
+const scripts = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/audit.js', 'js/health.js', 'js/app.js']
   .map((f) => ({ file: f, code: fs.readFileSync(path.join(ROOT, f), 'utf8') }));
 const logoSvg = fs.readFileSync(path.join(ROOT, 'assets', 'logo.svg'), 'utf8');
 const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'version.json'), 'utf8'));
@@ -45,6 +45,11 @@ copyDir(path.join(ROOT, 'css'), path.join(DIST, 'css'));
 copyDir(path.join(ROOT, 'js'), path.join(DIST, 'js'));
 fs.copyFileSync(path.join(ROOT, 'version.json'), path.join(DIST, 'version.json'));
 fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(DIST, 'index.html'));
+/* конфигурация и статус автоподдержки (v5.0) — сайт читает их сам */
+for (const extra of ['config.json', 'status.json']) {
+  const p = path.join(ROOT, extra);
+  if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, extra));
+}
 /* на всякий случай — 404 отдаёт главную (для SPA-хостингов) */
 fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(DIST, '404.html'));
 

@@ -8,6 +8,7 @@ const suites = [
   require('./smoke'),
   require('./e2e'),
   require('./security'),
+  require('./roles'),
   require('./load'),
   require('./build')
 ];

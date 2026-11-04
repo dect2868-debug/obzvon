@@ -1052,6 +1052,20 @@ th.sorted{animation:thPulse .3s ease}
 .health-log .health-empty{justify-content:center;color:var(--dim);border-left-color:transparent;
   background:none!important;text-align:center}
 
+/* ---- v5.0: надзор, роли, журнал действий ---- */
+.watch-box{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:11.5px}
+.watch-row{display:flex;gap:12px;align-items:baseline;justify-content:space-between;
+  padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.025);border-left:3px solid var(--acc)}
+.watch-row span{color:var(--dim);letter-spacing:1.2px;font-size:10.5px;flex-shrink:0}
+.watch-row b{color:var(--txt);text-align:right;word-break:break-word}
+.code-out{width:100%;margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--txt);
+  background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:10px;padding:9px 11px;
+  resize:vertical;white-space:pre;overflow-x:auto}
+.code-out::placeholder{color:#4d6288}
+.health-log li.hl-empty{justify-content:center;color:var(--dim);border-left-color:transparent;
+  background:none!important;text-align:center}
+.warn-text{color:var(--warn)}
+
 #healthScore.good{color:var(--ok)}
 #healthScore.warn{color:var(--warn)}
 #healthScore.bad{color:var(--red)}

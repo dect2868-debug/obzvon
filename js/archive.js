@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v4.9 · ARCHIVE — история обзвонов и сравнение
+   ОБЗВОН v5.0 · ARCHIVE — история обзвонов и сравнение
    Каждый завершённый обзвон сохраняется локально: вердикт,
    концентрация, читомеряк, реакция, число испытаний.
    Есть разбор по сессиям, сравнение с предыдущей и экспорт CSV.
@@ -16,13 +16,56 @@
 
   function el(id) { return document.getElementById(id); }
 
+  /* экранирование данных перед вставкой в HTML (v5.0): записи истории
+     берутся из localStorage, а значит могут быть подменены —
+     без экранирования это выполнение чужого кода на странице */
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = (s === null || s === undefined) ? '' : String(s);
+    return d.innerHTML;
+  }
+  /* числа — тоже через esc: значение может прийти не числом */
+  function num(v) {
+    var n = typeof v === 'number' && isFinite(v) ? v : 0;
+    return esc(n);
+  }
+
   /* ---------- хранение ---------- */
+
+  /* приводим запись к безопасному виду: из хранилища могли прийти
+     подделанные значения (v5.0) */
+  function sanitize(r) {
+    var n = function (v) { return typeof v === 'number' && isFinite(v) ? Math.round(v) : 0; };
+    var s = function (v, max) {
+      var t = (v === null || v === undefined) ? '' : String(v);
+      return t.length > max ? t.slice(0, max) : t;
+    };
+    var chips = Array.isArray(r.chips) ? r.chips.slice(0, 30).map(function (c) { return s(c, 40); }) : [];
+    return {
+      id: s(r.id, 60) || ('S' + Date.now().toString(36).toUpperCase()),
+      startedAt: n(r.startedAt) || Date.now(),
+      endedAt: n(r.endedAt) || Date.now(),
+      duration: n(r.duration),
+      conc: n(r.conc),
+      cheat: n(r.cheat),
+      focus: n(r.focus),
+      reaction: (r.reaction === null || r.reaction === undefined) ? null : n(r.reaction),
+      verdict: s(r.verdict, 30) || '—',
+      challenges: n(r.challenges),
+      ok: n(r.ok),
+      viol: n(r.viol),
+      chips: chips,
+      device: s(r.device, 40)
+    };
+  }
 
   function load() {
     try {
       var raw = localStorage.getItem(KEY);
       var d = raw ? JSON.parse(raw) : [];
-      items = Array.isArray(d) ? d.filter(function (r) { return r && typeof r === 'object'; }) : [];
+      items = Array.isArray(d)
+        ? d.filter(function (r) { return r && typeof r === 'object'; }).map(sanitize)
+        : [];
     } catch (e) { items = []; }
     return items;
   }
@@ -39,22 +82,7 @@
 
   function add(rec) {
     if (!rec) return null;
-    var row = {
-      id: rec.id || ('S' + Date.now().toString(36).toUpperCase()),
-      startedAt: rec.startedAt || Date.now(),
-      endedAt: rec.endedAt || Date.now(),
-      duration: rec.duration || 0,
-      conc: Math.round(rec.conc || 0),
-      cheat: Math.round(rec.cheat || 0),
-      focus: Math.round(rec.focus || 0),
-      reaction: (rec.reaction === null || rec.reaction === undefined) ? null : rec.reaction,
-      verdict: rec.verdict || '—',
-      challenges: rec.challenges || 0,
-      ok: rec.ok || 0,
-      viol: rec.viol || 0,
-      chips: rec.chips || [],
-      device: rec.device || ''
-    };
+    var row = sanitize(rec);
     items.unshift(row);
     if (items.length > MAX) items.length = MAX;
     save();
@@ -246,18 +274,18 @@
 
     var body = '<tbody>' + rows.map(function (r) {
       var sel = (r.id === selectedId) ? ' class="sel"' : '';
-      return '<tr' + sel + ' data-id="' + r.id + '">' +
+      return '<tr' + sel + ' data-id="' + esc(r.id) + '">' +
         '<td class="num">' + (items.indexOf(r) + 1) + '</td>' +
-        '<td>' + fmtDate(r.startedAt) + '</td>' +
-        '<td class="num">' + fmtDur(r.duration) + '</td>' +
-        '<td class="num ' + verdictClass(r.verdict) + '">' + r.conc + '%</td>' +
-        '<td class="num">' + r.cheat + '%</td>' +
-        '<td class="num">' + r.focus + '%</td>' +
-        '<td class="num">' + (r.reaction === null ? '—' : r.reaction + ' мс') + '</td>' +
-        '<td class="num">' + r.challenges + '</td>' +
-        '<td class="num">' + r.viol + '</td>' +
-        '<td class="' + verdictClass(r.verdict) + '">' + r.verdict + '</td>' +
-        '<td><button type="button" class="arch-del" data-del="' + r.id + '" title="Удалить запись">✕</button></td>' +
+        '<td>' + esc(fmtDate(r.startedAt)) + '</td>' +
+        '<td class="num">' + esc(fmtDur(r.duration)) + '</td>' +
+        '<td class="num ' + verdictClass(r.verdict) + '">' + num(r.conc) + '%</td>' +
+        '<td class="num">' + num(r.cheat) + '%</td>' +
+        '<td class="num">' + num(r.focus) + '%</td>' +
+        '<td class="num">' + (r.reaction === null || r.reaction === undefined ? '—' : num(r.reaction) + ' мс') + '</td>' +
+        '<td class="num">' + num(r.challenges) + '</td>' +
+        '<td class="num">' + num(r.viol) + '</td>' +
+        '<td class="' + verdictClass(r.verdict) + '">' + esc(r.verdict) + '</td>' +
+        '<td><button type="button" class="arch-del" data-del="' + esc(r.id) + '" title="Удалить запись">✕</button></td>' +
         '</tr>';
     }).join('') + '</tbody>';
     t.innerHTML = head + body;
@@ -291,8 +319,8 @@
 
     var out = '<div class="arch-cmp-head">' +
       '<span class="arch-cmp-title">СРАВНЕНИЕ</span>' +
-      '<span class="arch-cmp-cur">' + fmtDate(cur.startedAt) + ' · ' + cur.verdict + '</span>' +
-      (prev ? '<span class="arch-cmp-prev">с предыдущим: ' + fmtDate(prev.startedAt) + '</span>'
+      '<span class="arch-cmp-cur">' + esc(fmtDate(cur.startedAt)) + ' · ' + esc(cur.verdict) + '</span>' +
+      (prev ? '<span class="arch-cmp-prev">с предыдущим: ' + esc(fmtDate(prev.startedAt)) + '</span>'
             : '<span class="arch-cmp-prev">предыдущих обзвонов не было</span>') +
       '</div><table class="stat-table"><thead><tr><th>ПОКАЗАТЕЛЬ</th><th>ВЫБРАННЫЙ</th><th>ПРЕДЫДУЩИЙ</th><th>Δ</th></tr></thead><tbody>';
 
@@ -309,7 +337,7 @@
       } else {
         delta = '<span class="delta flat">—</span>';
       }
-      out += '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + delta + '</td></tr>';
+      out += '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td><td>' + delta + '</td></tr>';
     });
     out += '</tbody></table>';
     box.innerHTML = out;
@@ -340,6 +368,9 @@
 
   function csvCell(v) {
     var s = (v === null || v === undefined) ? '' : String(v);
+    /* защита от формул: Excel/Sheets выполняют текст, начинающийся
+       с = + - @ — такие значения обезличиваем (v5.0) */
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     if (/[",;\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   }

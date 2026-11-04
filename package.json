@@ -8,10 +8,17 @@
     "smoke": "node tests/smoke.js",
     "e2e": "node tests/e2e.js",
     "security": "node tests/security.js",
+    "roles": "node tests/roles.js",
     "load": "node tests/load.js",
     "stress": "node tests/stress.js",
     "build": "node tools/build.js",
-    "serve": "node tools/serve.js"
+    "serve": "node tools/serve.js",
+    "doctor": "node tools/doctor.js",
+    "doctor:fix": "node tools/doctor.js --fix",
+    "bump": "node tools/bump.js",
+    "bump:patch": "node tools/bump.js --bump patch",
+    "passgen": "node tools/passgen.js",
+    "status": "node tools/status.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.0"

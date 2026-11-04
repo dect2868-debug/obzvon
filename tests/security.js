@@ -25,10 +25,14 @@ function key(win, code, opts = {}) {
 
 /* поднимает сессию, чтобы нарушения фиксировались */
 async function session(pass = 'test-pass') {
-  const t = boot({ pass });
+  const t = boot({ pass, adminPass: 'admin-test-pass' });
   await sleep(60);
   t.win.document.getElementById('passInput').value = pass;
   t.win.document.getElementById('btnAuth').click();
+  await sleep(30);
+  /* обход калибровки по логотипу — только для тех. администратора (v5.0) */
+  t.win.document.getElementById('adminPass').value = 'admin-test-pass';
+  t.win.document.getElementById('btnAdminAuth').click();
   await sleep(30);
   const logo = t.win.document.querySelector('.logo');
   for (let i = 0; i < 5; i++) logo.click();

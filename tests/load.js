@@ -10,7 +10,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { boot, suite, assert, eq, sleep, ROOT } = require('./helpers');
+const { boot, suite, assert, eq, sleep, ROOT, loginAndCalibrate } = require('./helpers');
 
 const s = suite('LOAD (нагрузка и устойчивость)');
 
@@ -93,12 +93,7 @@ s.test('404 на неизвестный путь, без утечки файло
 s.test('флуд нарушениями: страница остаётся отзывчивой', async () => {
   const t = boot({ pass: 'test-pass' });
   await sleep(60);
-  t.win.document.getElementById('passInput').value = 'test-pass';
-  t.win.document.getElementById('btnAuth').click();
-  await sleep(20);
-  const logo = t.win.document.querySelector('.logo');
-  for (let i = 0; i < 5; i++) logo.click();
-  await sleep(20);
+  await loginAndCalibrate(t);
   t.win.document.getElementById('btnStart').click();
   await sleep(60);
 
@@ -146,12 +141,7 @@ s.test('флуд кликами и вводом не роняет интерфе
 s.test('после флуда состояние сессии остаётся в разумных размерах', async () => {
   const t = boot({ pass: 'test-pass' });
   await sleep(60);
-  t.win.document.getElementById('passInput').value = 'test-pass';
-  t.win.document.getElementById('btnAuth').click();
-  await sleep(20);
-  const logo = t.win.document.querySelector('.logo');
-  for (let i = 0; i < 5; i++) logo.click();
-  await sleep(20);
+  await loginAndCalibrate(t);
   t.win.document.getElementById('btnStart').click();
   await sleep(60);
   for (let i = 0; i < 1500; i++) t.win.Monitor.penalty('флуд ' + i, 1);

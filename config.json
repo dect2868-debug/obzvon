@@ -1,0 +1,17 @@
+{
+  "app": "obzvon-config",
+  "v": "5.0",
+  "updatedAt": "2026-11-04T00:00:00Z",
+  "comment": "Удалённая конфигурация: сайт читает этот файл сам и применяет настройки и возможности без обновления кода. Правьте файл на сервере — сайт подхватит изменения сам.",
+  "features": {
+    "autoUpdate": true,
+    "strict": false,
+    "collectDevice": true,
+    "audit": true
+  },
+  "threshold": 60,
+  "calibCount": 100,
+  "idleLimit": 65000,
+  "banner": "",
+  "news": []
+}

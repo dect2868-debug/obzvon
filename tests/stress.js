@@ -13,7 +13,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { boot, sleep, ROOT } = require('./helpers');
+const { boot, sleep, ROOT, loginAndCalibrate } = require('./helpers');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
@@ -89,12 +89,8 @@ async function flood(port, total, concurrency, label) {
 async function pageFlood(events, violations) {
   const t = boot({ pass: 'test-pass' });
   await sleep(120);
-  t.el('passInput').value = 'test-pass';
-  t.el('btnAuth').click();
-  await sleep(30);
-  const logo = t.win.document.querySelector('.logo');
-  for (let i = 0; i < 5; i++) logo.click();
-  await sleep(30);
+  await loginAndCalibrate(t);
+  await sleep(10);
   t.el('btnStart').click();
   await sleep(80);
 

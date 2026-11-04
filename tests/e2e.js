@@ -14,6 +14,9 @@ const V = JSON.parse(fs.readFileSync(path.join(ROOT, 'version.json'), 'utf8')).v
 
 const s = suite('E2E (сценарии работы системы)');
 
+/* код тех. администратора (v5.0) — в тестах подменяется хеш */
+const ADMIN_PASS = 'admin-test-pass';
+
 /* ---------- помощники ввода ---------- */
 
 function key(win, code, opts = {}) {
@@ -102,8 +105,11 @@ async function answerChallenge(win) {
   return null;
 }
 
-/* быстрый проход калибровки «пяти кликами по логотипу» */
+/* быстрый проход калибровки «пяти кликами по логотипу» —
+   с v5.0 это доступно только техническому администратору */
 function fastCalibrate(win) {
+  win.document.getElementById('adminPass').value = ADMIN_PASS;
+  win.document.getElementById('btnAdminAuth').click();
   const logo = win.document.querySelector('.logo');
   for (let i = 0; i < 5; i++) logo.click();
 }
@@ -528,35 +534,47 @@ s.test('модули освобождают ресурсы — система у
    v4.2 · АДМИНКА И ФОНОВОЕ ОБНОВЛЕНИЕ
    ============================================================ */
 
-s.test('админка закрыта до ввода кода куратора', async () => {
-  const t = boot({ pass: 'test-pass' });
+s.test('админка закрыта до ввода кода', async () => {
+  const t = boot({ pass: 'test-pass', adminPass: ADMIN_PASS });
   await sleep(150);
   eq(t.el('adminBody').hidden, true, 'тело админки открыто без кода');
   eq(t.el('adminGate').hidden, false, 'гейт админки скрыт');
   t.close();
 });
 
+s.test('код куратора НЕ открывает админку (у ролей разные коды)', async () => {
+  const t = boot({ pass: 'test-pass', adminPass: ADMIN_PASS });
+  await sleep(150);
+  t.el('adminPass').value = 'test-pass';
+  t.el('btnAdminAuth').click();
+  await sleep(120);
+  eq(t.el('adminBody').hidden, true, 'админка открылась по коду куратора');
+  eq(t.win.OBZ.admin().authed, false, 'состояние админки не должно переключиться');
+  t.close();
+});
+
 s.test('неверный код не открывает админку, верный — открывает', async () => {
-  const t = boot({ pass: 'test-pass' });
+  const t = boot({ pass: 'test-pass', adminPass: ADMIN_PASS });
   await sleep(150);
   t.el('adminPass').value = 'wrong';
   t.el('btnAdminAuth').click();
   await sleep(60);
   eq(t.el('adminBody').hidden, true, 'админка открылась с неверным кодом');
 
-  t.el('adminPass').value = 'test-pass';
+  t.el('adminPass').value = ADMIN_PASS;
   t.el('btnAdminAuth').click();
   await sleep(120);
   eq(t.el('adminBody').hidden, false, 'админка не открылась с верным кодом');
   eq(t.el('adminGate').hidden, true, 'гейт админки не скрылся');
   eq(t.win.OBZ.admin().authed, true, 'состояние админки не переключилось');
+  eq(t.win.OBZ.role(), 'admin', 'роль не переключилась на администратора');
   t.close();
 });
 
 s.test('админка показывает состояние системы и версию', async () => {
-  const t = boot({ pass: 'test-pass' });
+  const t = boot({ pass: 'test-pass', adminPass: ADMIN_PASS });
   await sleep(150);
-  t.el('adminPass').value = 'test-pass';
+  t.el('adminPass').value = ADMIN_PASS;
   t.el('btnAdminAuth').click();
   await sleep(200);
   assert(t.$$('#healthGrid .hcard').length >= 8, 'нет карточек состояния');
@@ -564,10 +582,23 @@ s.test('админка показывает состояние системы и
   t.close();
 });
 
-s.test('нагрузочный тест в админке мерит отзывчивость страницы', async () => {
-  const t = boot({ pass: 'test-pass' });
+s.test('надзор показывает живое состояние системы', async () => {
+  const t = boot({ pass: 'test-pass', adminPass: ADMIN_PASS });
   await sleep(150);
-  t.el('adminPass').value = 'test-pass';
+  t.el('adminPass').value = ADMIN_PASS;
+  t.el('btnAdminAuth').click();
+  await sleep(300);
+  const txt = t.el('adminWatch').textContent || '';
+  assert(/СЕССИЯ/.test(txt), 'в надзоре нет состояния сессии: ' + txt);
+  assert(/ЦЕЛОСТНОСТЬ/.test(txt), 'в надзоре нет проверки целостности');
+  assert(/ЖУРНАЛ|admin\.open/.test(t.el('adminAudit').textContent || ''), 'в журнале действий нет записи о входе');
+  t.close();
+});
+
+s.test('нагрузочный тест в админке мерит отзывчивость страницы', async () => {
+  const t = boot({ pass: 'test-pass', adminPass: ADMIN_PASS });
+  await sleep(150);
+  t.el('adminPass').value = ADMIN_PASS;
   t.el('btnAdminAuth').click();
   await sleep(120);
   t.el('btnAdminStressSmall').click();
@@ -581,9 +612,9 @@ s.test('нагрузочный тест в админке мерит отзыв�
 });
 
 s.test('кнопка «Закрыть» выводит из админки', async () => {
-  const t = boot({ pass: 'test-pass' });
+  const t = boot({ pass: 'test-pass', adminPass: ADMIN_PASS });
   await sleep(150);
-  t.el('adminPass').value = 'test-pass';
+  t.el('adminPass').value = ADMIN_PASS;
   t.el('btnAdminAuth').click();
   await sleep(120);
   t.el('btnAdminLock').click();

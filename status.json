@@ -1,0 +1,11 @@
+{
+  "app": "obzvon-status",
+  "v": "5.0",
+  "at": "2026-11-04T02:16:30.295Z",
+  "result": "ok",
+  "commit": "e522dd504f68f5d69cee5b92d7ce2cf855c6c67e",
+  "branch": "feat/v5-roles-admin",
+  "notes": "начальное состояние: репозиторий обновлён до v5.0",
+  "run": "",
+  "url": ""
+}

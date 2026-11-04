@@ -1,0 +1,63 @@
+name: Публикация ОБЗВОН (GitHub Pages)
+
+# Разворачивает сайт на GitHub Pages. Работает, если Pages уже включены
+# в репозитории (Settings → Pages → Source: GitHub Actions).
+# Если Pages не включены — шаг публикации молча пропускается.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Сборка и публикация
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Взять код
+        uses: actions/checkout@v4
+
+      - name: Подготовить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Проверить, опубликован ли сайт на Pages
+        id: pages
+        run: |
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' "https://${{ github.repository }}.github.io/" || true)"
+          if [ "$CODE" = "200" ]; then echo "enabled=true" >> "$GITHUB_OUTPUT"; else echo "enabled=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Собрать сайт
+        if: steps.pages.outputs.enabled == 'true'
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+
+      - name: Настроить Pages
+        id: config
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Загрузить артефакт
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Опубликовать
+        id: deploy
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/deploy-pages@v4

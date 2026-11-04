@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const { JSDOM, VirtualConsole } = require('jsdom');
 
 const ROOT = path.join(__dirname, '..');
-const SCRIPTS = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/health.js', 'js/app.js'];
+const SCRIPTS = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/audit.js', 'js/health.js', 'js/app.js'];
 
 function sha256(s) {
   return crypto.createHash('sha256').update(s, 'utf8').digest('hex');
@@ -40,6 +40,7 @@ function mockCtx() {
  * Поднимает сайт в jsdom.
  * @param {object} opts
  *  - pass: код куратора для тестов (хеш подменяется в исходнике app.js)
+ *  - adminPass: код тех. администратора (v5.0, отдельный хеш)
  *  - storage: объект с начальным содержимым localStorage
  *  - version: версия, которую отдаёт мок version.json
  *  - noFetch: не подменять fetch
@@ -105,6 +106,14 @@ function boot(opts = {}) {
       if (!opts.noFetch) {
         window.fetch = function (url) {
           fetchCalls.push(String(url));
+          const u = String(url);
+          /* удалённая конфигурация и статус автоподдержки (v5.0) */
+          if (opts.config && /config\.json/.test(u)) {
+            return Promise.resolve({ ok: true, json: function () { return Promise.resolve(opts.config); } });
+          }
+          if (opts.status && /status\.json/.test(u)) {
+            return Promise.resolve({ ok: true, json: function () { return Promise.resolve(opts.status); } });
+          }
           return Promise.resolve({
             ok: true,
             json: function () { return Promise.resolve({ v: version }); }
@@ -141,6 +150,13 @@ function boot(opts = {}) {
         /passHash:\s*'[0-9a-f]+'/,
         "passHash: '" + sha256(opts.pass) + "'"
       );
+    }
+    /* код тех. администратора — отдельный (v5.0) */
+    if (f === 'js/app.js') {
+      code = code
+        .replace(/adminHash:\s*'[0-9a-f]+'/, "adminHash: '" + sha256(opts.adminPass || 'admin-test-pass') + "'")
+        .replace(/adminSalt:\s*'[^']*'/, "adminSalt: ''")
+        .replace(/adminIter:\s*\d+/, 'adminIter: 0');
     }
     win.eval(code + '\n//# sourceURL=' + f);
   }
@@ -214,4 +230,20 @@ function eq(actual, expected, msg) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-module.exports = { boot, suite, assert, eq, sleep, sha256, closeAll, ROOT, SCRIPTS };
+/* вход в пульт куратором и тех. администратором + обход калибровки
+   (с v5.0 пять кликов по логотипу доступны только администратору) */
+async function loginAndCalibrate(t, pass = 'test-pass', adminPass = 'admin-test-pass') {
+  const d = t.win.document;
+  d.getElementById('passInput').value = pass;
+  d.getElementById('btnAuth').click();
+  await sleep(20);
+  d.getElementById('adminPass').value = adminPass;
+  d.getElementById('btnAdminAuth').click();
+  await sleep(20);
+  const logo = t.win.document.querySelector('.logo');
+  for (let i = 0; i < 5; i++) logo.click();
+  await sleep(20);
+  return t;
+}
+
+module.exports = { boot, suite, assert, eq, sleep, sha256, closeAll, ROOT, SCRIPTS, loginAndCalibrate };
