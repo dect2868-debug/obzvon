@@ -29,6 +29,8 @@ concurrency:
 jobs:
   maintain:
     name: Проверка и обновление
+    # коммиты самого бота не запускают проверку заново — иначе будет круг
+    if: github.event_name != 'push' || github.actor != 'obzvon-bot'
     runs-on: ubuntu-latest
     steps:
       - name: Взять код
@@ -51,7 +53,7 @@ jobs:
       - name: Тесты
         run: npm test
 
-      - name: Не трогать собственные коммиты бота
+      - name: Не поднимать версию на коммитах бота
         id: who
         run: |
           AUTHOR="$(git log -1 --format='%an')"
@@ -63,12 +65,19 @@ jobs:
 
       - name: Поднять версию и разнести по файлам
         if: steps.who.outputs.skip == 'false'
+        env:
+          EVENT: ${{ github.event_name }}
+          KIND: ${{ github.event.inputs.bump }}
         run: |
-          KIND="${{ github.event.inputs.bump || 'patch' }}"
           if [ "$KIND" = "none" ]; then
+            # только синхронизация: чиним рассинхрон версии, релиз не делаем
+            node tools/bump.js --sync
+          elif [ "$EVENT" = "schedule" ]; then
+            # ночная проверка: релиз не делаем, только чиним рассинхрон
             node tools/bump.js --sync
           else
-            node tools/bump.js --bump "$KIND" --notes "авто-обновление: проверки пройдены"
+            K="${KIND:-patch}"
+            node tools/bump.js --bump "$K" --notes "авто-обновление: проверки пройдены"
           fi
 
       - name: Записать статус автоподдержки
@@ -76,7 +85,7 @@ jobs:
         run: node tools/status.js "${{ job.status == 'success' && 'ok' || 'failed' }}" "прогон ${{ github.run_number }}"
 
       - name: Закоммитить изменения
-        if: steps.who.outputs.skip == 'false'
+        if: success()
         run: |
           git config user.name "obzvon-bot"
           git config user.email "bot@users.noreply.github.com"
@@ -86,10 +95,17 @@ jobs:
             exit 0
           fi
           V="$(node -p "require('./version.json').v")"
-          git commit -m "chore: авто-обновление v$V"
-          git tag -a "v$V" -m "v$V"
-          git push
-          git push --tags
+          if [ "${{ steps.who.outputs.skip }}" = "false" ]; then
+            git commit -m "chore: авто-обновление v$V"
+          else
+            git commit -m "chore: статус автоподдержки"
+          fi
+          git push origin HEAD:main
+          if [ "${{ steps.who.outputs.skip }}" = "false" ]; then
+            # тег — отдельным толчком и с принудительной отправкой объектов
+            git tag -f "v$V" -m "v$V" || true
+            git push --force origin "refs/tags/v$V:refs/tags/v$V" || echo "тег не отправлен — не критично"
+          fi
 
       - name: Задача при сбое проверок
         if: failure()
