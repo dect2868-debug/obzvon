@@ -53,6 +53,19 @@ for (const extra of ['config.json', 'status.json', 'integrity.json']) {
 /* на всякий случай — 404 отдаёт главную (для SPA-хостингов) */
 fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(DIST, '404.html'));
 
+/* ---------- 1b) коды доступа (v6.0) ----------
+   В репозитории их нет: берём из локального auth.local.json или из
+   секрета CI (AUTH_LOCAL_B64) и кладём в dist/js/ — до сборки
+   однофайловой версии, чтобы коды попали и туда. */
+try {
+  execFileSync(process.execPath, [path.join(ROOT, 'tools', 'inject-auth.js')], { cwd: ROOT, stdio: 'pipe' });
+} catch (e) { console.error('коды доступа не внедрены: ' + e.message); }
+if (!fs.existsSync(path.join(DIST, 'js', 'auth.local.js'))) {
+  fs.writeFileSync(path.join(DIST, 'js', 'auth.local.js'),
+    '/* ФАЙЛ С КОДАМИ ДОСТУПА (пустой: коды не заданы) */\nwindow.OBZ_AUTH = {};\n', 'utf8');
+  console.error('ВНИМАНИЕ: коды доступа не заданы — входа в пульт и админку не будет');
+}
+
 /* ---------- 2) сборка в один файл ---------- */
 const nonce = crypto.randomBytes(16).toString('base64');
 let single = html;
@@ -64,16 +77,14 @@ single = single.replace(
 );
 
 /* коды доступа — внутрь (иначе в однофайловой версии вход не работает) */
-const authPath = path.join(ROOT, 'js', 'auth.local.js');
-if (fs.existsSync(authPath)) {
-  const authCode = fs.readFileSync(authPath, 'utf8').replace(/<\/script/gi, '<\\/script');
-  single = single.replace(
-    /<script src="js\/auth\.local\.js\?v=[^"]+"><\/script>/,
-    '<script nonce="' + nonce + '">\n' + authCode + '\n</script>'
-  );
-} else {
-  console.error('ВНИМАНИЕ: js/auth.local.js не найден — в однофайловой версии входа не будет');
-}
+const authPath = path.join(DIST, 'js', 'auth.local.js');
+const authCode = fs.existsSync(authPath)
+  ? fs.readFileSync(authPath, 'utf8').replace(/<\/script/gi, '<\\/script')
+  : 'window.OBZ_AUTH = {};\n';
+single = single.replace(
+  /<script src="js\/auth\.local\.js\?v=[^"]+"><\/script>/,
+  '<script nonce="' + nonce + '">\n' + authCode + '\n</script>'
+);
 
 /* логотип — data:URI */
 const logoUri = 'data:image/svg+xml;base64,' + Buffer.from(logoSvg, 'utf8').toString('base64');
@@ -104,13 +115,6 @@ if (process.platform === 'win32') {
 } else {
   execFileSync('sh', ['-c', 'cd "' + DIST + '" && zip -rq "' + zip + '" .'], { stdio: 'pipe' });
 }
-
-/* ---------- коды доступа (v6.0) ----------
-   В репозитории их нет: файл auth.local.json лежит локально, в CI — в секрете.
-   Здесь он попадает в готовый сайт (dist/), чтобы вход работал. */
-try {
-  require('child_process').execFileSync(process.execPath, [path.join(ROOT, 'tools', 'inject-auth.js')], { cwd: ROOT, stdio: 'pipe' });
-} catch (e) { console.error('коды доступа не внедрены: ' + e.message); }
 
 const size = (f) => (fs.existsSync(f) ? (fs.statSync(f).size / 1024).toFixed(1) + ' КБ' : '—');
 console.log('Сборка готова:');
