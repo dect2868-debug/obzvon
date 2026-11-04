@@ -39,7 +39,8 @@ jobs:
       - name: Подготовить Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # jsdom требует Node 22+ (zstd в undici)
+          node-version: '24'
 
       - name: Установить зависимости
         run: npm ci --no-audit --no-fund
