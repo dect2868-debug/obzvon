@@ -1,11 +1,11 @@
 {
   "app": "obzvon-status",
-  "v": "5.0",
-  "at": "2026-11-04T02:16:30.295Z",
+  "v": "5.1",
+  "at": "2026-11-04T02:24:20.309Z",
   "result": "ok",
-  "commit": "e522dd504f68f5d69cee5b92d7ce2cf855c6c67e",
-  "branch": "feat/v5-roles-admin",
-  "notes": "начальное состояние: репозиторий обновлён до v5.0",
-  "run": "",
-  "url": ""
+  "commit": "d453c1de713f9036aa37390e87662a85b2984bd7",
+  "branch": "main",
+  "notes": "прогон 2",
+  "run": "41760450965",
+  "url": "https://github.com/dect2868-debug/obzvon/actions/runs/41760450965"
 }
