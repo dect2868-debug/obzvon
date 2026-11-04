@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v6.4 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.0 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '6.4',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.0',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -73,6 +73,20 @@
       collectDevice: true,    // собирать данные об устройстве в отчёте
       audit: true             // вести журнал действий
     },
+    /* ---------- РЕЖИМЫ ОБЗВОНА (v7.0) ----------
+       Один и тот же движок — разный характер: темп, набор испытаний,
+       жёсткость. Режим выбирает куратор в пульте или приходит из config.json. */
+    modes: {
+      normal: { label: 'Обычный',    speed: 1,    delay: [6000, 14000], kinds: null },
+      sprint: { label: 'Спринт',     speed: 0.8,  delay: [4000, 9000],  kinds: null },
+      exam:   { label: 'Экзамен',    speed: 1.05, delay: [5000, 11000],
+                kinds: ['math', 'seq', 'stroop', 'ink', 'count'] },
+      warmup: { label: 'Тренировка', speed: 1.35, delay: [9000, 20000],
+                kinds: ['key', 'target'] }
+    },
+    mode: 'normal',        // текущий режим обзвона
+    /* ---------- НАСТРОЙКИ ИНТЕРФЕЙСА (v7.0) ---------- */
+    ui: { density: 'comfortable', bigButtons: false, volume: 60 },
     configUrl: 'config.json',  // удалённая конфигурация (функции и настройки)
     statusUrl: 'status.json',  // состояние автоподдержки (пишет CI на GitHub)
     integrityUrl: 'integrity.json', // опубликованный отпечаток файлов
@@ -97,11 +111,13 @@
   };
 
   /* таймауты по типам испытаний (мс) */
-  var CH_TIMEOUTS = { key: 6750, target: 7500, hold: 10500, math: 9000, seq: 13500, stroop: 9000 };
+  var CH_TIMEOUTS = { key: 6750, target: 7500, hold: 10500, math: 9000, seq: 13500,
+                     stroop: 9000, count: 10000, ink: 9000 };
   /* минимальное время на ответ при калибровке (v6.1):
      ниже этих значений испытание не проходит даже у быстрых людей —
      из-за этого калибровка сбрасывалась на первом же провале */
-  var CALIB_MIN = { key: 2200, target: 2200, math: 3400, seq: 3800, stroop: 2400, hold: 2600 };
+  var CALIB_MIN = { key: 2200, target: 2200, math: 3400, seq: 3800, stroop: 2400, hold: 2600,
+                    count: 3600, ink: 2600 };
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -307,7 +323,9 @@
     'btnAuthAdmin','adminRoles','adminWatch','adminAudit','adminBuildInfo','adminCfgInfo',
     'adminNewCode','btnAdminRotate','btnAdminResetCode','btnAdminRefresh','btnAdminDump','btnAdminCfg','btnAdminAuditClear',
     'adminCodeExport','adminPolicies','adminThreats','btnAdminPolicyReset','btnAdminIntegrity',
-    'adminStats','btnAdminStats']
+    'adminStats','btnAdminStats','adminAlarm','adminAlarms','adminProfiles','selDemoKind','btnAdminDemo',
+    'btnAdminProfiles','btnAdminHtml','btnAdminExportAll','selMode','selDensity',
+    'chkBigButtons','selVolume','btnAdminApplyUi']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- реестр слушателей и таймеров (v4.2) ----------
@@ -395,6 +413,7 @@
   var actx = null;
   function beep(freq, dur, type, vol) {
     if (ST.muted) return;
+    vol = (vol || 0.04) * (CONFIG.ui.volume / 100);
     try {
       if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
       var o = actx.createOscillator(), g = actx.createGain();
@@ -511,7 +530,8 @@
      ============================================================ */
   var KIND_NAMES = {
     key: 'Клавиша', target: 'Цель', hold: 'Удержание',
-    math: 'Математика', seq: 'Память', stroop: 'Струп'
+    math: 'Математика', seq: 'Память', stroop: 'Струп',
+    count: 'Счёт', ink: 'Слово'
   };
   var CH_LOG = [];   /* журнал испытаний: {n,kind,calib,ok,ms,note,time} */
 
@@ -651,11 +671,15 @@
     clearInterval(CH.tick); CH.tick = null;
   }
 
+  /* текущий режим обзвона */
+  function mode() { return CONFIG.modes[CONFIG.mode] || CONFIG.modes.normal; }
+  function modeKinds() { var m = mode(); return (m && m.kinds) ? m.kinds : null; }
   function kindRoll(calib) {
-    /* калибровка — по одному каждого вида в случайном порядке (уже не «три задания») */
+    /* калибровка — все виды по очереди в случайном порядке;
+       сеанс — набор по режиму (в «Экзамене» — только сложные) */
     var pool = calib
-      ? ['key', 'target', 'hold', 'math', 'seq', 'stroop']
-      : ['key', 'target', 'hold', 'math', 'seq', 'stroop', 'key', 'target'];
+      ? ['key', 'target', 'hold', 'math', 'seq', 'stroop', 'count', 'ink']
+      : (modeKinds() || ['key', 'target', 'hold', 'math', 'seq', 'stroop', 'count', 'ink', 'key', 'target']);
     var k = ST.lastKind;
     for (var i = 0; i < 6 && k === ST.lastKind; i++) k = pool[rnd(0, pool.length - 1)];
     ST.lastKind = k;
@@ -664,8 +688,10 @@
 
   /* темп: первые 3 испытания — щадящие, дальше ускоряется */
   function nextDelay() {
+    var m = mode();
+    var d = (m && m.delay) ? m.delay : [6000, 14000];
     var early = CH_SEANCE <= 3;
-    return rnd(early ? 9000 : 6000, early ? 20000 : 14000);
+    return rnd(early ? Math.round(d[1] * 1.35) : d[0], early ? Math.round(d[1] * 1.45) : d[1]);
   }
 
   function scheduleNext() {
@@ -716,6 +742,9 @@
     }
     /* после 6-го испытания сессии таймауты жёстче на 20% */
     if (!calib && CH_SEANCE > 6) to = Math.round(to * 0.8);
+    /* скорость режима («Спринт» — короче, «Тренировка» — длиннее) */
+    var mSpd = mode().speed || 1;
+    if (!calib && mSpd !== 1) to = Math.round(to * mSpd);
     CH.timeout = to;
     CH.deadline = Date.now() + to;
 
@@ -762,6 +791,38 @@
           if (CH.active && CH.kind === 'stroop') endChallenge(idx === CH.answerColor, 'не тот цвет');
         });
         els.stroopRow.appendChild(b2);
+      });
+    } else if (kind === 'count') {
+      /* «Счёт»: посчитать нужные символы среди других */
+      var targetSym = '★';
+      var otherSym = ['●', '▲', '■', '◆', '○'];
+      var nStar = rnd(3, 9);
+      var totalSym = nStar + rnd(3, 6);
+      var chars = [];
+      for (var ci = 0; ci < totalSym; ci++) {
+        chars.push(Math.random() < 0.55 ? targetSym : otherSym[rnd(0, otherSym.length - 1)]);
+      }
+      chars.sort(function () { return Math.random() - 0.5; });
+      CH.answer = String(nStar);
+      CH.countHtml = '<div class="count-row">' + chars.join('') + '</div>';
+      taskHtml = 'ПОСЧИТАЙТЕ <b>' + targetSym + '</b> — СКОЛЬКО ИХ?' + CH.countHtml;
+    } else if (kind === 'ink') {
+      /* «Слово»: слово написано ЦВЕТОМ — ответить словом, а не цветом
+         (зеркальный Струп: так тянет ошибиться) */
+      var wIdx = rnd(0, 3), inkIdx = rnd(0, 3);
+      if (inkIdx === wIdx) inkIdx = (wIdx + 1) % 4;
+      CH.answerColor = wIdx;
+      taskHtml = 'КЛИКНИТЕ ПО СЛОВУ, КОТОРОЕ НАПИСАНО ЦВЕТОМ:' +
+        '<div class="stroop-word" style="color:' + STROOP_COLORS[inkIdx][1] + '">' + STROOP_COLORS[wIdx][0] + '</div>';
+      els.stroopRow.hidden = false;
+      STROOP_COLORS.forEach(function (c, idx) {
+        var b3 = document.createElement('button');
+        b3.type = 'button'; b3.className = 'ch-btn'; b3.textContent = c[0];
+        b3.style.background = c[1];
+        on(b3, 'click', function () {
+          if (CH.active && CH.kind === 'ink') endChallenge(idx === CH.answerColor, 'не то слово');
+        });
+        els.stroopRow.appendChild(b3);
       });
     } else { /* target */
       taskHtml = 'КЛИКНИТЕ ПО <b>ЦЕЛИ</b>';
@@ -938,6 +999,17 @@
       return;
     }
 
+    if (CH.kind === 'count') {
+      if (/^Digit[0-9]$/.test(code)) {
+        CH.typed += code.slice(5);
+        els.chTask.innerHTML = 'ОТВЕТ: <b>' + CH.typed + '</b>' +
+          (CH.countHtml || '');
+        if (CH.typed === CH.answer) { endChallenge(true, ''); return; }
+        if (CH.typed.length >= (CH.answer || '').length) endChallenge(false, 'неверное число');
+      }
+      return;
+    }
+
     if (CH.kind === 'math') {
       if (/^Digit[0-9]$/.test(code)) {
         var dg = code.slice(5);
@@ -1002,8 +1074,8 @@
       els.chPad.hidden = false;
       return;
     }
-    if (kind !== 'key' && kind !== 'math' && kind !== 'seq') return;
-    var chars = kind === 'math' ? '0123456789'.split('') : ABC.split('');
+    if (kind !== 'key' && kind !== 'math' && kind !== 'seq' && kind !== 'count') return;
+    var chars = (kind === 'math' || kind === 'count') ? '0123456789'.split('') : ABC.split('');
     chars.forEach(function (ch) {
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'pad-key'; b.textContent = ch;
@@ -1211,6 +1283,15 @@
     feedAdd({ time: ts(), label: 'Обзвон завершён · вердикт: ' + verdict + ' · ср. концентрация ' + totAvg + '% · фишек: ' + achList.length, sev: verdict === 'ЗАЧЁТ' ? 0 : 2 });
     if (window.Audit) Audit.log('session.end', 'вердикт ' + verdict + ' · концентрация ' + totAvg + '%');
     if (window.Stats) Stats.count('session.end');
+    /* профиль устройства: обзвоны, концентрация, реакция (анонимно) */
+    if (window.Profiles) {
+      try {
+        Profiles.onSession({
+          conc: Monitor.concentration(), reaction: ar, viol: S.viol.length,
+          calibrated: !!ST.calibrated
+        });
+      } catch (eP) {}
+    }
     /* авто-выгрузка отчёта (политика autoReport) */
     if (CONFIG.policies.autoReport) {
       try { setTimeout(function () { downloadReport(); }, 1200); } catch (eAuto) {}
@@ -1419,6 +1500,38 @@
     return list;
   }
 
+  /* ---------- настройки интерфейса (v7.0) ---------- */
+  var UI_KEY = 'obzvon_v2_ui';
+  function loadUi() {
+    try {
+      var d = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
+      if (d && typeof d === 'object') {
+        if (d.density === 'compact' || d.density === 'comfortable') CONFIG.ui.density = d.density;
+        if (typeof d.bigButtons === 'boolean') CONFIG.ui.bigButtons = d.bigButtons;
+        if (typeof d.volume === 'number' && d.volume >= 0 && d.volume <= 100) CONFIG.ui.volume = d.volume;
+      }
+    } catch (e) {}
+    applyUi();
+  }
+  function applyUi() {
+    try {
+      var b = document.body;
+      if (!b) return;
+      b.classList.toggle('dense', CONFIG.ui.density === 'compact');
+      b.classList.toggle('big-pad', !!CONFIG.ui.bigButtons);
+    } catch (e) {}
+  }
+  function saveUi() {
+    try { localStorage.setItem(UI_KEY, JSON.stringify(CONFIG.ui)); } catch (e) {}
+    applyUi();
+    adminUiRender();
+  }
+  function adminUiRender() {
+    if (els.selDensity) els.selDensity.value = CONFIG.ui.density;
+    if (els.chkBigButtons) els.chkBigButtons.checked = !!CONFIG.ui.bigButtons;
+    if (els.selVolume) els.selVolume.value = String(CONFIG.ui.volume);
+  }
+
   /* ---------- полный экран ---------- */
   function goFullscreen() {
     var el = document.documentElement;
@@ -1585,6 +1698,9 @@
     data.audit = window.Audit ? Audit.report() : null;
     data.threats = THREATS.slice(0, 20);
     data.stats = window.Stats ? Stats.snapshot() : null;
+    data.profiles = window.Profiles ? Profiles.list() : [];
+    data.alarms = ALARMS.slice(0, 20);
+    data.mode = CONFIG.mode;
     /* контрольная сумма тела отчёта: видно, что отчёт не правили */
     data.sha256 = sha256hex(JSON.stringify(data));
     return data;
@@ -1603,6 +1719,92 @@
     a.download = 'obzvon-report-' + (ST.sessionId || 'no-session') + '.json';
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  /* ---------- HTML-отчёт для руководства (v7.0) ----------
+     Одна страница со сводкой по всем обзвонам: можно открыть, распечатать
+     или отправить руководителю. */
+  function buildHtmlReport() {
+    var items = (window.Archive && Archive.list) ? Archive.list() : [];
+    var tot = loadTotals();
+    var avgConc = 0, okN = 0, badN = 0, sumViol = 0, sumCh = 0;
+    items.forEach(function (r) {
+      avgConc += Number(r.conc) || 0;
+      sumViol += Number(r.viol) || 0;
+      sumCh += Number(r.challenges) || 0;
+      if (r.verdict === 'ЗАЧЁТ') okN++; else if (r.verdict === 'НЕЗАЧЁТ') badN++;
+    });
+    if (items.length) avgConc = Math.round(avgConc / items.length);
+    var rows = items.map(function (r, i) {
+      return '<tr><td>' + (i + 1) + '</td><td>' + esc(new Date(r.startedAt).toLocaleString()) +
+        '</td><td>' + esc(String(r.verdict || '—')) + '</td><td>' + (Number(r.conc) || 0) + '%</td><td>' +
+        (Number(r.cheat) || 0) + '%</td><td>' + (r.reaction === null || r.reaction === undefined ? '—' : r.reaction) +
+        '</td><td>' + (Number(r.challenges) || 0) + '</td><td>' + (Number(r.viol) || 0) + '</td></tr>';
+    }).join('');
+    var html = '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">' +
+      '<title>Отчёт по обзвонам — v' + esc(CONFIG.appVersion) + '</title><style>' +
+      'body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0b0f17;color:#e8eefc;' +
+      'margin:0;padding:28px}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:26px 0 10px;' +
+      'color:#34e7ff;font-weight:600}.muted{color:#7d8ca3;font-size:13px;margin:0 0 18px}' +
+      '.cards{display:flex;flex-wrap:wrap;gap:12px}.card{background:#141a26;border:1px solid #1f2a3d;' +
+      'border-radius:12px;padding:12px 16px;min-width:130px}.card span{display:block;color:#7d8ca3;font-size:11px;' +
+      'letter-spacing:1px;text-transform:uppercase}.card b{font-size:22px}table{width:100%;border-collapse:collapse;' +
+      'margin-top:10px;font-size:13px}th,td{border-bottom:1px solid #1f2a3d;padding:8px 10px;text-align:left}' +
+      'th{color:#7d8ca3;font-size:11px;letter-spacing:1px;text-transform:uppercase}@media print{' +
+      'body{background:#fff;color:#111}.card{border-color:#ccc}}</style></head><body>' +
+      '<h1>Отчёт по обзвонам</h1>' +
+      '<p class="muted">система ОБЗВОН · версия ' + esc(CONFIG.appVersion) + ' · собран ' +
+      esc(new Date().toLocaleString()) + '</p>' +
+      '<div class="cards">' +
+      '<div class="card"><span>обзвонов</span><b>' + items.length + '</b></div>' +
+      '<div class="card"><span>средняя концентрация</span><b>' + avgConc + '%</b></div>' +
+      '<div class="card"><span>зачёт</span><b>' + okN + '</b></div>' +
+      '<div class="card"><span>незачёт</span><b>' + badN + '</b></div>' +
+      '<div class="card"><span>нарушений всего</span><b>' + sumViol + '</b></div>' +
+      '<div class="card"><span>испытаний всего</span><b>' + sumCh + '</b></div>' +
+      '</div><h2>Обзвоны</h2>' +
+      (items.length
+        ? '<table><thead><tr><th>№</th><th>когда</th><th>вердикт</th><th>конц.</th><th>читомеряк</th>' +
+          '<th>реакция</th><th>испытаний</th><th>нарушений</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<p class="muted">обзвонов пока нет</p>') +
+      '</body></html>';
+    return html;
+  }
+
+  function downloadHtmlReport() {
+    var blob = new Blob([buildHtmlReport()], { type: 'text/html;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'obzvon-otchet-' + new Date().toISOString().slice(0, 10) + '.html';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    if (window.Audit) Audit.log('report.html', 'выгрузка HTML-отчёта');
+    toast('HTML-отчёт сохранён', 'good');
+  }
+
+  /* ---------- экспорт всего разом (v7.0) ---------- */
+  function exportEverything() {
+    var data = {
+      app: 'obzvon-export', v: CONFIG.appVersion,
+      generatedAt: new Date().toISOString(),
+      history: (window.Archive && Archive.list) ? Archive.list() : [],
+      totals: loadTotals(),
+      stats: window.Stats ? Stats.snapshot() : null,
+      profiles: window.Profiles ? Profiles.list() : [],
+      audit: window.Audit ? Audit.report() : null,
+      threats: THREATS.slice(0, 50),
+      alarms: ALARMS.slice(0, 50),
+      config: remoteCfg.raw,
+      build: buildStatus
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'obzvon-all-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    if (window.Audit) Audit.log('export.all', 'выгрузка всех данных');
+    toast('Все данные выгружены в JSON', 'good');
   }
 
   /* ---------- экспорт / импорт статистики (v3.8) ---------- */
@@ -1811,6 +2013,17 @@
   on(els.btnSumClose, 'click', function () { els.sumOverlay.hidden = true; resetAll(); });
   on(els.btnReset, 'click', resetAll);
   on(els.selThreshold, 'change', function () { ST.threshold = parseInt(els.selThreshold.value, 10); });
+  /* режим обзвона (v7.0) */
+  if (els.selMode) {
+    els.selMode.value = CONFIG.mode;
+    on(els.selMode, 'change', function () {
+      var m = CONFIG.modes[els.selMode.value];
+      if (!m) { els.selMode.value = CONFIG.mode; return; }
+      CONFIG.mode = els.selMode.value;
+      if (window.Audit) Audit.log('mode.set', m.label);
+      toast('Режим обзвона: ' + m.label, 'good');
+    });
+  }
 
   /* сортировка таблиц результатов (v3.8) */
   bindSort(els.statTable, statSort, updateTables);
@@ -1908,6 +2121,10 @@
     violation: function (item) {
       feedAdd(item);
       threat(item.type || 'viol', item.label);
+      /* сильное нарушение — сигнал тех. администратору */
+      if (item.sev >= 2 && ST.state === 'running') {
+        alarm(item.label, 'штраф ' + item.weight + ' · «читомеряк» ' + Monitor.cheatPercent() + '%', 2);
+      }
       toast(item.label + '  (+' + item.weight + ')', item.sev >= 2 ? 'bad' : '');
       document.body.classList.add('shake');
       setTimeout(function () { document.body.classList.remove('shake'); }, 400);
@@ -2156,7 +2373,8 @@
      обзвон не прерывается. Если что-то пошло не так — есть запасной
      вариант с обычной перезагрузкой. */
   var MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
-                 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/health.js', 'js/app.js'];
+                 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/profiles.js',
+                 'js/health.js', 'js/app.js'];
 
   function fallbackReload(v) {
     try {
@@ -2625,6 +2843,8 @@
     adminPolicyRender();
     adminThreatRender();
     adminStatsRender();
+    adminProfilesRender();
+    adminAlarmRender();
   }
   function adminToast(msg, cls) { toast(msg, cls || ''); }
 
@@ -2761,6 +2981,60 @@
         });
       })(inputs[i]);
     }
+  }
+
+  /* ---------- ТРЕВОЖНЫЙ СИГНАЛ (v7.0) ----------
+     Сильное нарушение во время обзвона — сигнал тех. администратору:
+     яркая плашка в админке, звук и событие в сборщик (оттуда — в Telegram). */
+  var ALARMS = [];
+  function alarm(title, detail, sev) {
+    var a = { t: Date.now(), title: title, detail: detail || '', sev: sev || 2 };
+    ALARMS.unshift(a);
+    while (ALARMS.length > 30) ALARMS.pop();
+    if (window.Audit) Audit.log('alarm', title + (detail ? ' — ' + detail : ''));
+    if (window.Stats) Stats.count('alarm', title + (detail ? ' — ' + detail : ''));
+    adminAlarmRender();
+    try { sndAlarm(); } catch (eA) {}
+    return a;
+  }
+  function adminAlarmRender() {
+    if (!els.adminAlarm) return;
+    var last = ALARMS[0];
+    if (!last) {
+      els.adminAlarm.hidden = true;
+    } else {
+      els.adminAlarm.hidden = false;
+      els.adminAlarm.textContent = '⚠ ' + last.title + (last.detail ? ' — ' + last.detail : '');
+    }
+    if (!els.adminAlarms) return;
+    if (!ALARMS.length) {
+      els.adminAlarms.innerHTML = '<li class="hl-empty">тревог не было</li>';
+      return;
+    }
+    els.adminAlarms.innerHTML = ALARMS.slice(0, 20).map(function (a) {
+      var d = new Date(a.t);
+      function p(n) { return ('0' + n).slice(-2); }
+      return '<li class="hl-error"><time>' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' +
+        p(d.getSeconds()) + '</time><b>⚠</b> ' + esc(a.title) +
+        (a.detail ? ' — ' + esc(a.detail) : '') + '</li>';
+    }).join('');
+  }
+
+  /* ---------- профили участников (v7.0) ---------- */
+  function adminProfilesRender() {
+    if (!els.adminProfiles) return;
+    var list = window.Profiles ? Profiles.list() : [];
+    if (!list.length) {
+      els.adminProfiles.innerHTML = '<div class="pol-note">профилей пока нет — они появятся после первого обзвона на этом устройстве</div>';
+      return;
+    }
+    var rows = list.slice(0, 20).map(function (p) {
+      var cls = p.trust >= 75 ? 'ok' : (p.trust >= 45 ? 'warn' : 'bad');
+      return '<div class="watch-row"><span>' + esc(p.id.slice(0, 8)) + ' · обзвонов ' + p.calls +
+        ' · конц. ' + p.conc + '%' + (p.reaction ? ' · реакция ' + p.reaction + ' мс' : '') +
+        '</span><b class="' + cls + '">доверие ' + p.trust + ' (' + p.trustLabel + ')</b></div>';
+    });
+    els.adminProfiles.innerHTML = rows.join('');
   }
 
   /* ---------- статистика в цифрах (v6.1) ---------- */
@@ -3006,6 +3280,31 @@
     adminStatsRender();
     adminToast('Статистика обновлена', 'good');
   });
+  if (els.btnAdminDemo) on(els.btnAdminDemo, 'click', function () {
+    var kind = els.selDemoKind ? els.selDemoKind.value : 'key';
+    if (OBZ.demo(kind)) {
+      adminToast('Пример испытания показан в блоке «Сеанс»', 'good');
+      var link = document.querySelector('.nav-link[data-view="seance"]');
+      if (link) link.click();
+    }
+  });
+  if (els.btnAdminProfiles) on(els.btnAdminProfiles, 'click', function () {
+    adminProfilesRender();
+    adminToast('Профили обновлены', 'good');
+  });
+  if (els.btnAdminHtml) on(els.btnAdminHtml, 'click', downloadHtmlReport);
+  if (els.btnAdminExportAll) on(els.btnAdminExportAll, 'click', exportEverything);
+  if (els.btnAdminApplyUi) on(els.btnAdminApplyUi, 'click', function () {
+    if (els.selDensity) CONFIG.ui.density = els.selDensity.value;
+    if (els.chkBigButtons) CONFIG.ui.bigButtons = !!els.chkBigButtons.checked;
+    if (els.selVolume) CONFIG.ui.volume = parseInt(els.selVolume.value, 10) || 0;
+    saveUi();
+    if (window.Audit) Audit.log('ui.set', 'плотность ' + CONFIG.ui.density + ' · кнопки ' + (CONFIG.ui.bigButtons ? 'крупные' : 'обычные') + ' · звук ' + CONFIG.ui.volume);
+    adminToast('Настройки интерфейса применены', 'good');
+  });
+  if (els.selDensity) on(els.selDensity, 'change', saveUi);
+  if (els.chkBigButtons) on(els.chkBigButtons, 'change', saveUi);
+  if (els.selVolume) on(els.selVolume, 'change', saveUi);
   if (els.btnAdminAuditClear) on(els.btnAdminAuditClear, 'click', function () {
     if (window.Audit) { Audit.clear(); adminAuditRender(); }
     adminToast('Журнал действий очищен', 'good');
@@ -3014,6 +3313,7 @@
   every(1000, function () { if (admin.authed) adminWatchRender(); });
   every(5000, function () { if (admin.authed) adminAuditRender(); });
   every(10000, function () { if (admin.authed) adminStatsRender(); });
+  every(15000, function () { if (admin.authed) adminProfilesRender(); });
   if (els.btnAdminPurge) on(els.btnAdminPurge, 'click', function () {
     if (typeof window.confirm === 'function' && !/jsdom/i.test(navigator.userAgent || '')) {
       try { if (window.confirm('Удалить статистику, историю и состояние сессии? Действие необратимо.') === false) return; } catch (e) {}
@@ -3050,6 +3350,25 @@
     threats: function () { return THREATS.slice(); },
     /* статистика посещений и обзвонов (v6.1) */
     stats: function () { return window.Stats ? Stats.snapshot() : null; },
+    /* профили участников и доверие (v7.0) */
+    profiles: function () { return window.Profiles ? Profiles.list() : []; },
+    /* тревожные сигналы (v7.0) */
+    alarms: function () { return ALARMS.slice(); },
+    /* текущий режим обзвона (v7.0) */
+    mode: function () { return CONFIG.mode; },
+    /* показать пример испытания выбранного вида (v7.0) —
+       только тех. администратору: удобно проверить, как выглядит задание */
+    demo: function (kind) {
+      if (!admin.authed) { toast('Нужен код тех. администратора', 'bad'); return false; }
+      if (CH.active) { toast('Сначала завершите текущее испытание', 'bad'); return false; }
+      var kinds = ['key', 'target', 'hold', 'math', 'seq', 'stroop', 'count', 'ink'];
+      if (kinds.indexOf(kind) < 0) kind = 'key';
+      var wasState = ST.state;
+      ST.state = 'running';
+      runChallenge(kind, false);
+      ST.state = wasState;
+      return true;
+    },
     /* настроены ли коды на этом хостинге */
     authReady: function () { return { curator: roleReady('curator'), admin: roleReady('admin') }; },
     /* журнал действий */
@@ -3107,6 +3426,10 @@
 
   if (window.Audit) Audit.init();
   if (window.Stats) Stats.init();   /* счётчик посещений */
+  loadUi();                        /* настройки интерфейса */
+  if (window.Profiles) Profiles.current();   /* профиль устройства */
+  adminUiRender();
+  adminAlarmRender();
   updateMetrics();
   updateTotalConcUI();
   restoreState();

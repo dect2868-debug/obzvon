@@ -1,18 +1,19 @@
 {
   "app": "obzvon-integrity",
-  "v": "6.4",
-  "at": "2026-11-04T03:35:42.392Z",
+  "v": "7.0",
+  "at": "2026-11-04T07:16:46.130Z",
   "fingerprint": "7b2f2c0ef66fc8d6f44355afeec35b89677002107d377c9cd25075bcc35bab67",
   "files": {
-    "js/fx.js": "90e82a6a91ff4d8e",
-    "js/monitor.js": "0e5a5ce659e02fbf",
-    "js/nav.js": "a4499945eb8f6c42",
-    "js/live.js": "86a2967ec2fa19a3",
-    "js/archive.js": "f202a5882990adc7",
-    "js/audit.js": "76f587ace8cb9abb",
-    "js/stats.js": "262865d0d5b13163",
-    "js/health.js": "4d71eecfc9efa1ea",
-    "js/app.js": "f52ef19f7c57159d",
-    "css/styles.css": "0807511a7d1cc627"
+    "js/fx.js": "16cf6d10f1a56fb3",
+    "js/monitor.js": "034ed0dfdc9470f5",
+    "js/nav.js": "5cdd7a1a28e0cc94",
+    "js/live.js": "882d4e1746cbe3d7",
+    "js/archive.js": "9044f851a4a23708",
+    "js/audit.js": "cf6aefe4ad16c5e2",
+    "js/stats.js": "a349d190ed58f91f",
+    "js/profiles.js": "e469773a7322892e",
+    "js/health.js": "a0df461e031c6e7d",
+    "js/app.js": "f6d654894d27253e",
+    "css/styles.css": "ec4e02ee46ef0d94"
   }
 }

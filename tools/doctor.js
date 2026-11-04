@@ -37,7 +37,7 @@ function warn(msg) { warns.push(msg); }
 function ok(msg) { console.log('  OK    ' + msg); }
 
 const MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
-                 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/health.js', 'js/app.js'];
+                 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/profiles.js', 'js/health.js', 'js/app.js'];
 
 console.log('ДИАГНОСТИКА ОБЗВОН');
 console.log('');

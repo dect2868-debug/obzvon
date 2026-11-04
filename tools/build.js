@@ -32,7 +32,7 @@ function copyDir(src, dst) {
 /* ---------- читаем исходники ---------- */
 let html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'css', 'styles.css'), 'utf8');
-const scripts = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/health.js', 'js/app.js']
+const scripts = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/profiles.js', 'js/health.js', 'js/app.js']
   .map((f) => ({ file: f, code: fs.readFileSync(path.join(ROOT, f), 'utf8') }));
 const logoSvg = fs.readFileSync(path.join(ROOT, 'assets', 'logo.svg'), 'utf8');
 const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'version.json'), 'utf8'));

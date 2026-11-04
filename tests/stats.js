@@ -73,7 +73,25 @@ async function answer(win) {
       return 'key';
     }
   }
-  if (/КЛИКНИТЕ ПО ЦВЕТУ/.test(text)) {
+  if (/ПОСЧИТАЙТЕ/.test(text)) {
+    const row = win.document.querySelector('.count-row');
+    if (row) {
+      const sym = (row.textContent.match(/★/g) || []).length;
+      String(sym).split('').forEach((d) => key(win, 'Digit' + d, { key: d }));
+      return 'count';
+    }
+  }
+  /* «Слово»: кликнуть по слову, написанному цветом */
+  if (/КЛИКНИТЕ ПО СЛОВУ/.test(text)) {
+    const word = win.document.querySelector('.stroop-word');
+    const row = win.document.getElementById('stroopRow');
+    const need = word ? (word.textContent || '').trim() : '';
+    const btns = row ? [].slice.call(row.querySelectorAll('.ch-btn')) : [];
+    for (const b of btns) {
+      if ((b.textContent || '').trim() === need) { b.click(); return 'ink'; }
+    }
+    if (btns.length) { btns[0].click(); return 'ink'; }
+  }  if (/КЛИКНИТЕ ПО ЦВЕТУ/.test(text)) {
     const row = win.document.getElementById('stroopRow');
     const btns = row ? [].slice.call(row.querySelectorAll('.ch-btn')) : [];
     if (btns.length) { btns[0].click(); return 'stroop'; }

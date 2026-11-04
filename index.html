@@ -10,7 +10,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=6.4" />
+  <link rel="stylesheet" href="css/styles.css?v=7.0" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -36,7 +36,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 6.4</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.0</div>
         </div>
       </div>
 
@@ -212,6 +212,14 @@
                     <option value="75">75%</option>
                   </select>
                 </label>
+                <label class="sel">режим:
+                  <select id="selMode">
+                    <option value="normal">Обычный</option>
+                    <option value="sprint">Спринт</option>
+                    <option value="exam">Экзамен</option>
+                    <option value="warmup">Тренировка</option>
+                  </select>
+                </label>
                 <label class="sel">калибровка:
                   <select id="selCalib">
                     <option value="6">6 (обычно)</option>
@@ -377,12 +385,61 @@
 
               <!-- содержимое админки -->
               <div id="adminBody" hidden>
+                <div class="alarm-bar" id="adminAlarm" hidden></div>
                 <div class="admin-block">
                   <div class="admin-block-title">ПОЛИТИКИ И ВМЕШАТЕЛЬСТВО</div>
                   <div class="pol-box" id="adminPolicies">—</div>
                   <div class="health-tools">
                     <button type="button" class="btn btn-ghost" id="btnAdminPolicyReset" title="Вернуть значения из config.json">↺ Сбросить локальные</button>
                     <button type="button" class="btn btn-ghost" id="btnAdminIntegrity" title="Сверить отпечаток файлов сайта">⟳ Проверить файлы</button>
+                  </div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">ТРЕВОГА</div>
+                  <ul class="health-log" id="adminAlarms"></ul>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">ПРОФИЛИ УЧАСТНИКОВ И ДОВЕРИЕ</div>
+                  <div class="watch-box" id="adminProfiles">—</div>
+                  <div class="health-tools">
+                    <label class="sel">пример испытания
+                      <select id="selDemoKind">
+                        <option value="key">Клавиша</option>
+                        <option value="target">Цель</option>
+                        <option value="hold">Удержание</option>
+                        <option value="math">Математика</option>
+                        <option value="seq">Память</option>
+                        <option value="stroop">Струп</option>
+                        <option value="count">Счёт</option>
+                        <option value="ink">Слово</option>
+                      </select>
+                    </label>
+                    <button type="button" class="btn btn-ghost" id="btnAdminDemo" title="Показать, как выглядит это испытание">👁 Показать</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminProfiles" title="Обновить список профилей">⟳ Обновить</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminHtml" title="Скачать HTML-отчёт для руководства">⬇ Отчёт (HTML)</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminExportAll" title="Выгрузить все данные одним файлом">⬇ Все данные</button>
+                  </div>
+                  <div class="pol-note">Профиль — это анонимный отпечаток устройства (не человек). Оценка доверия считается по средней концентрации и числу нарушений.</div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">НАСТРОЙКИ ИНТЕРФЕЙСА</div>
+                  <div class="pol-grid">
+                    <label class="sel">плотность
+                      <select id="selDensity">
+                        <option value="comfortable">обычная</option>
+                        <option value="compact">плотная</option>
+                      </select>
+                    </label>
+                    <label class="chk"><input type="checkbox" id="chkBigButtons" /> крупные кнопки ответа</label>
+                    <label class="sel">звук
+                      <input type="number" id="selVolume" class="input" min="0" max="100" step="10" />
+                    </label>
+                  </div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminApplyUi">Применить</button>
                   </div>
                 </div>
 
@@ -499,6 +556,24 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v7.0</div>
+                  <div class="news-body">
+                    <h3>v7.0: режимы обзвона, два новых испытания, профили с доверием, тревоги в Telegram, HTML-отчёт и настройки интерфейса</h3>
+                    <p>Обновление поднято автоматически: проверки проекта пройдены,
+                       версия разнесена по всем файлам. Подробности — в журнале
+                       изменений репозитория.</p>
+                  </div>
+                </article>
+                <article class="news-item">
+                  <div class="news-ver">v6.5</div>
+                  <div class="news-body">
+                    <h3>v7.0: режимы обзвона, два новых испытания, профили с доверием, тревоги в Telegram, HTML-отчёт и настройки интерфейса</h3>
+                    <p>Обновление поднято автоматически: проверки проекта пройдены,
+                       версия разнесена по всем файлам. Подробности — в журнале
+                       изменений репозитория.</p>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v6.4</div>
                   <div class="news-body">
                     <h3>v6.1: статистика в цифрах, сборщик посещений и починка калибровки</h3>
@@ -915,16 +990,17 @@
   <!-- ФАЙЛ С КОДАМИ ДОСТУПА. В РЕПОЗИТОРИИ ЕГО НЕТ (.gitignore):
        он собирается на сервере или в CI из секретов. Если файла нет —
        вход в пульт и в админку невозможен (это так и задумано). -->
-  <script src="js/auth.local.js?v=6.4"></script>
-  <script src="js/fx.js?v=6.4"></script>
-  <script src="js/monitor.js?v=6.4"></script>
-  <script src="js/nav.js?v=6.4"></script>
-  <script src="js/live.js?v=6.4"></script>
-  <script src="js/archive.js?v=6.4"></script>
-  <script src="js/audit.js?v=6.4"></script>
-  <script src="js/stats.js?v=6.4"></script>
-  <script src="js/health.js?v=6.4"></script>
-  <script src="js/app.js?v=6.4"></script>
+  <script src="js/auth.local.js?v=7.0"></script>
+  <script src="js/fx.js?v=7.0"></script>
+  <script src="js/monitor.js?v=7.0"></script>
+  <script src="js/nav.js?v=7.0"></script>
+  <script src="js/live.js?v=7.0"></script>
+  <script src="js/archive.js?v=7.0"></script>
+  <script src="js/audit.js?v=7.0"></script>
+  <script src="js/stats.js?v=7.0"></script>
+  <script src="js/profiles.js?v=7.0"></script>
+  <script src="js/health.js?v=7.0"></script>
+  <script src="js/app.js?v=7.0"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

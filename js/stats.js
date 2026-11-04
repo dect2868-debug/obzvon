@@ -80,18 +80,20 @@ window.Stats = (function () {
   }
 
   /* отправка события сборщику (если он настроен) */
-  function send(ev) {
+  function send(ev, detail) {
     if (!collector) return;
     try {
+      var body = { id: pid, ev: ev, ts: Date.now() };
+      if (detail) body.d = String(detail).slice(0, 300);
       fetch(collector, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: pid, ev: ev, ts: Date.now() })
+        body: JSON.stringify(body)
       }).catch(function () {});
     } catch (e) {}
   }
 
-  function count(ev) {
+  function count(ev, detail) {
     load();
     var now = Date.now();
     switch (ev) {
@@ -114,7 +116,7 @@ window.Stats = (function () {
       for (var i = 0; i < keys.length - MAX_PEOPLE; i++) delete people[keys[i]];
     }
     save();
-    send(ev);
+    send(ev, detail);
     return counters;
   }
 
