@@ -1065,6 +1065,14 @@ th.sorted{animation:thPulse .3s ease}
 .health-log li.hl-empty{justify-content:center;color:var(--dim);border-left-color:transparent;
   background:none!important;text-align:center}
 .warn-text{color:var(--warn)}
+/* ---- v7.1: офлайн-режим, поиск по журналу, метки новостей ---- */
+.feed-tools{margin-bottom:10px}
+.feed-tools .input{width:100%;max-width:340px}
+.news-area{display:inline-block;margin:6px 0 0;font-family:var(--mono);font-size:10px;
+  letter-spacing:1.2px;text-transform:uppercase;color:var(--acc);text-decoration:none;
+  border:1px solid rgba(52,231,255,.35);border-radius:999px;padding:3px 9px;cursor:pointer}
+.news-area:hover{background:rgba(52,231,255,.12)}
+body.dense .feed-list{max-height:none}
 /* ---- v7.0: тревожная плашка, режимы, настройки ---- */
 .alarm-bar{margin:0 0 12px;padding:11px 14px;border-radius:12px;font-family:var(--mono);font-size:12px;
   color:#ffd9e0;background:rgba(255,77,109,.14);border:1px solid rgba(255,77,109,.55);

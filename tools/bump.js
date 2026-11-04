@@ -37,6 +37,16 @@ const arg = (name, def) => {
 const MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
                  'js/archive.js', 'js/audit.js', 'js/health.js', 'js/app.js'];
 
+/* к какому разделу сайта относится новость (v7.1) */
+function newsArea(text) {
+  const t = String(text || '').toLowerCase();
+  if (/защит|безопас|взлом|шифр|код/.test(t)) return { label: 'защита', view: 'help', anchor: 'protect' };
+  if (/надзор|админ|монитор|профил|тревог|статист/.test(t)) return { label: 'надзор', view: 'health', anchor: '' };
+  if (/интерфейс|кноп|меню|тему|шрифт|экран/.test(t)) return { label: 'интерфейс', view: 'seance', anchor: '' };
+  if (/автоподдерж|ci|github|обновлен|релиз|верси/.test(t)) return { label: 'автоподдержка', view: 'health', anchor: '' };
+  return { label: 'обновление', view: 'news', anchor: '' };
+}
+
 function bumpVersion(v, kind) {
   const m = String(v).match(/^(\d+)\.(\d+)$/);
   if (!m) return v;
@@ -120,6 +130,8 @@ function syncAll(v, notes) {
   const first = html2.match(/news-ver">v([\d.]+)</);
   if (!first || first[1] !== v) {
     const text = notes || 'Автоматическое обновление';
+    /* метка раздела: новость связана с тем местом сайта, где это менялось */
+    const area = newsArea(text);
     const article =
       '                <article class="news-item news-new">\r\n' +
       '                  <div class="news-ver">v' + v + '</div>\r\n' +
@@ -128,6 +140,8 @@ function syncAll(v, notes) {
       '                    <p>Обновление поднято автоматически: проверки проекта пройдены,\r\n' +
       '                       версия разнесена по всем файлам. Подробности — в журнале\r\n' +
       '                       изменений репозитория.</p>\r\n' +
+      '                    <a class="news-area" data-view="' + area.view + '"' +
+      (area.anchor ? ' data-anchor="' + area.anchor + '"' : '') + '>' + area.label + '</a>\r\n' +
       '                  </div>\r\n' +
       '                </article>\r\n';
     /* снимаем пометку «свежая» со старой записи */

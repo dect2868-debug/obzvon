@@ -10,7 +10,9 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=7.0" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/styles.css?v=7.1" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -36,7 +38,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.0</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.1</div>
         </div>
       </div>
 
@@ -396,6 +398,18 @@
                 </div>
 
                 <div class="admin-block">
+                  <div class="admin-block-title">БЫСТРОЕ ВМЕШАТЕЛЬСТВО</div>
+                  <div class="admin-row" id="adminOffline">офлайн-режим: проверяем…</div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminActPause">⏸ Пауза</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminActResume">▶ Продолжить</button>
+                    <button type="button" class="btn btn-danger" id="btnAdminActEnd">■ Завершить</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminActUnlock">🔓 Снять блокировку</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminOffline">⟳ Обновить офлайн-кэш</button>
+                  </div>
+                </div>
+
+                <div class="admin-block">
                   <div class="admin-block-title">ТРЕВОГА</div>
                   <ul class="health-log" id="adminAlarms"></ul>
                 </div>
@@ -542,6 +556,7 @@
           <section class="panel feed" id="feedPanel">
             <div class="panel-head"><span class="panel-title">ЖУРНАЛ СОБЫТИЙ</span><span class="panel-hint" id="feedCount">0</span></div>
             <div class="panel-body">
+              <div class="feed-tools"><input type="search" id="feedFilter" class="input" placeholder="поиск по журналу…" autocomplete="off" /></div>
               <ul class="feed-list" id="signalList">
                 <li class="feed-empty">событий нет</li>
               </ul>
@@ -556,12 +571,24 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v7.1</div>
+                  <div class="news-body">
+                    <h3>Автоматическое обновление</h3>
+                    <p>Обновление поднято автоматически: проверки проекта пройдены,
+                       версия разнесена по всем файлам. Подробности — в журнале
+                       изменений репозитория.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v7.0</div>
                   <div class="news-body">
                     <h3>v7.0: режимы обзвона, два новых испытания, профили с доверием, тревоги в Telegram, HTML-отчёт и настройки интерфейса</h3>
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">надзор</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -571,6 +598,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">надзор</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -580,6 +609,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">надзор</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -589,6 +620,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -598,6 +631,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -607,6 +642,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -622,6 +659,8 @@
                        (авто-пауза, мягкий режим, авто-отчёт, лимит попыток),
                        <b>журнал угроз</b>, <b>проверка отпечатка файлов</b> на сервере,
                        <b>горячие клавиши куратора</b> и контрольная сумма отчёта.</p>
+                    <a class="news-area" data-view="help" data-anchor="protect">защита</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -631,6 +670,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -640,6 +681,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -649,6 +692,8 @@
                     <p>Обновление поднято автоматически: проверки проекта пройдены,
                        версия разнесена по всем файлам. Подробности — в журнале
                        изменений репозитория.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -667,6 +712,8 @@
                        Сайт сам подхватывает настройки и новые возможности из config.json,
                        а CI на GitHub проверяет проект, чинит известные сбои, поднимает
                        версию и пишет status.json — видно, что автоподдержка жива.</p>
+                    <a class="news-area" data-view="health">надзор</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -679,6 +726,8 @@
                        у верхней панели — цветная кромка. Кнопка-бургер
                        нарисована вектором и теперь видна на любом фоне —
                        раньше её глиф был чёрным и пропадал.</p>
+                    <a class="news-area" data-view="seance">интерфейс</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -691,6 +740,8 @@
                        Никакого мигания: все эффекты долгие (3–26 с) и
                        низкоконтрастные, а при настройке «меньше движения»
                        страница остаётся статичной.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -699,6 +750,8 @@
                     <h3>Мелкие правки интерфейса</h3>
                     <p>Убрана «залипшая» красная рамка у карточек метрик и заменена
                        иконка кнопки обновления на аккуратную векторную.</p>
+                    <a class="news-area" data-view="seance">интерфейс</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -712,6 +765,8 @@
                        тёмная консоль: один акцентный цвет, тонкие границы,
                        ровная типографика и читаемые цифры. Фон — редкие
                        мерцающие звёзды.</p>
+                    <a class="news-area" data-view="seance">интерфейс</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -721,6 +776,8 @@
                     <p>После фонового обновления надпись «ВЕРСИЯ» в меню
                        приводится в соответствие с реально загруженным кодом,
                        а не остаётся от старой страницы.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -730,6 +787,8 @@
                     <p>После применения обновления баннер закрывается сам, а факт
                        смены версии попадает в журнал событий — видно, что сайт
                        обновился сам, без вмешательства человека.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -739,6 +798,8 @@
                     <p>Сайт теперь запоминает, какие версии он применял и когда.
                        Список виден в админке — по нему видно, что фоновое
                        обновление действительно прошло на живом сайте.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -751,6 +812,8 @@
                        <b>админка</b> с кодом куратора: состояние всех подсистем,
                        управление обновлениями, авто-починка, перезапуск, очистка
                        хранилища и локальный нагрузочный тест.</p>
+                    <a class="news-area" data-view="health">надзор</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -765,6 +828,8 @@
                        динамика: график работает с самого начала обзвона, показывает
                        значения в шапке, ведёт ленту событий и сам пересоздаётся, если
                        canvas потерян.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -779,6 +844,8 @@
                        подмены системных часов и отладчика; подпись сохранённых данных сессии.
                        Новая графика: неоновый след за курсором, импульсные волны и вспышка
                        при блокировке.</p>
+                    <a class="news-area" data-view="help" data-anchor="protect">защита</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -790,6 +857,8 @@
                        столбца. Новая страница «Справка»: как проходит обзвон, виды испытаний,
                        клавиши и советы. Защита: невидимый водяной знак с ID сессии,
                        проверка целостности кода и новые блокировки сочетаний клавиш.</p>
+                    <a class="news-area" data-view="help" data-anchor="protect">защита</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -799,6 +868,8 @@
                     <p>Новая страница «Новости» в боковой панели — здесь разработчик публикует,
                        что изменилось в системе. Графика расширена: искры при клике,
                        глитч-эффект на кнопках, живой блик на активном пункте меню.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -807,6 +878,8 @@
                     <h3>Анимированный градиент-фон</h3>
                     <p>Под страницей плавно перетекают четыре неоновых пятна поверх звёзд —
                        фон «дышит» и не мешает чтению.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -815,6 +888,8 @@
                     <h3>Две новые фишки</h3>
                     <p>«Полный набор» — верно пройдены все шесть видов испытаний;
                        «Снимки отбиты» — попытки снимка экрана во время обзвона перехвачены.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -824,6 +899,8 @@
                     <p>В итогах появились отдельные достижения за чистое поведение
                        («Руки прочь», «Буфер под защитой», «Снимки отбиты» и другие),
                        таймауты испытаний увеличены в 1,5 раза.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -832,6 +909,8 @@
                     <h3>Страницы-разделы и страница «Память»</h3>
                     <p>Боковая панель переключает отдельные страницы вместо прокрутки;
                        добавлена страница «Память» с графиком JS-heap и данными о памяти ПК.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -840,6 +919,8 @@
                     <h3>Новый интерфейс</h3>
                     <p>Боковая панель-навигация с подсветкой активного раздела,
                        липкий топбар с таймером сессии, мобильная шторка по ☰.</p>
+                    <a class="news-area" data-view="seance">интерфейс</a>
+
                   </div>
                 </article>
                 <article class="news-item">
@@ -848,6 +929,8 @@
                     <h3>Неон / киберпанк</h3>
                     <p>Вращающиеся градиентные рамки панелей, скан-луч, глитч-заголовок,
                        3D-наклон карточек по курсору, неоновые глифы-дождь.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+
                   </div>
                 </article>
               </div>
@@ -912,7 +995,7 @@
                     <li>Общий отчёт сессии скачивается с «Пульта куратора».</li>
                   </ul>
                 </div>
-                <div class="help-card">
+                <div class="help-card" id="protect">
                   <h3>🛡 Защита обзвона</h3>
                   <ul class="help-list">
                     <li>Копирование, перетаскивание и контекстное меню отключены.</li>
@@ -922,6 +1005,11 @@
                         экрана сразу покажет, чья это сессия.</li>
                     <li>Система проверяет <b>целостность кода</b> и реагирует
                         на попытки вмешательства.</li>
+                    <li>Каждая новость в разделе «Новости» — ссылка на то, что
+                        менялось: нажмите метку раздела, чтобы попасть в нужное место.</li>
+                    <li>Проверочная атака на защиту прогоняется автотестами
+                        (<code>npm run audit</code>) — список векторов — в
+                        <code>tests/audit.js</code>.</li>
                   </ul>
                 </div>
               </div>
@@ -990,17 +1078,17 @@
   <!-- ФАЙЛ С КОДАМИ ДОСТУПА. В РЕПОЗИТОРИИ ЕГО НЕТ (.gitignore):
        он собирается на сервере или в CI из секретов. Если файла нет —
        вход в пульт и в админку невозможен (это так и задумано). -->
-  <script src="js/auth.local.js?v=7.0"></script>
-  <script src="js/fx.js?v=7.0"></script>
-  <script src="js/monitor.js?v=7.0"></script>
-  <script src="js/nav.js?v=7.0"></script>
-  <script src="js/live.js?v=7.0"></script>
-  <script src="js/archive.js?v=7.0"></script>
-  <script src="js/audit.js?v=7.0"></script>
-  <script src="js/stats.js?v=7.0"></script>
-  <script src="js/profiles.js?v=7.0"></script>
-  <script src="js/health.js?v=7.0"></script>
-  <script src="js/app.js?v=7.0"></script>
+  <script src="js/auth.local.js?v=7.1"></script>
+  <script src="js/fx.js?v=7.1"></script>
+  <script src="js/monitor.js?v=7.1"></script>
+  <script src="js/nav.js?v=7.1"></script>
+  <script src="js/live.js?v=7.1"></script>
+  <script src="js/archive.js?v=7.1"></script>
+  <script src="js/audit.js?v=7.1"></script>
+  <script src="js/stats.js?v=7.1"></script>
+  <script src="js/profiles.js?v=7.1"></script>
+  <script src="js/health.js?v=7.1"></script>
+  <script src="js/app.js?v=7.1"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

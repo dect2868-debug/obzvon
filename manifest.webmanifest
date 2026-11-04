@@ -1,0 +1,19 @@
+{
+  "name": "ОБЗВОН — система обзвона",
+  "short_name": "ОБЗВОН",
+  "description": "Система проведения обзвона с проверкой внимательности участника",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0f17",
+  "theme_color": "#0b0f17",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "assets/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

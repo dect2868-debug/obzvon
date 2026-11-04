@@ -20,7 +20,9 @@
     "passgen": "node tools/passgen.js",
     "inject:auth": "node tools/inject-auth.js",
     "integrity": "node tools/integrity.js",
-    "status": "node tools/status.js"
+    "status": "node tools/status.js",
+    "audit": "node tests/audit.js",
+    "offline": "node tools/offline-check.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.0"

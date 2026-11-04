@@ -45,8 +45,9 @@ copyDir(path.join(ROOT, 'css'), path.join(DIST, 'css'));
 copyDir(path.join(ROOT, 'js'), path.join(DIST, 'js'));
 fs.copyFileSync(path.join(ROOT, 'version.json'), path.join(DIST, 'version.json'));
 fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(DIST, 'index.html'));
-/* конфигурация, статус автоподдержки и отпечаток файлов (v5.0–v6.0) — сайт читает их сам */
-for (const extra of ['config.json', 'status.json', 'integrity.json']) {
+/* конфигурация, статус автоподдержки, отпечаток и офлайн-воркер
+   (v5.0–v7.1) — сайт читает их сам */
+for (const extra of ['config.json', 'status.json', 'integrity.json', 'sw.js', 'manifest.webmanifest']) {
   const p = path.join(ROOT, extra);
   if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, extra));
 }

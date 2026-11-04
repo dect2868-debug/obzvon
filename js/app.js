@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.0 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.1 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.0',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.1',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -324,6 +324,8 @@
     'adminNewCode','btnAdminRotate','btnAdminResetCode','btnAdminRefresh','btnAdminDump','btnAdminCfg','btnAdminAuditClear',
     'adminCodeExport','adminPolicies','adminThreats','btnAdminPolicyReset','btnAdminIntegrity',
     'adminStats','btnAdminStats','adminAlarm','adminAlarms','adminProfiles','selDemoKind','btnAdminDemo',
+    'adminOffline','btnAdminOffline','btnAdminActPause','btnAdminActResume','btnAdminActEnd',
+    'btnAdminActUnlock','feedFilter',
     'btnAdminProfiles','btnAdminHtml','btnAdminExportAll','selMode','selDensity',
     'chkBigButtons','selVolume','btnAdminApplyUi']
    .forEach(function (id) { els[id] = $(id); });
@@ -479,6 +481,24 @@
 
   function feedRebuild() {
     FEED.forEach(feedDomAdd);   /* от старых к новым — новое сверху */
+  }
+
+  /* ---------- поиск по журналу (v7.1) ---------- */
+  var FEED_FILTER = '';
+  function feedFilter() {
+    if (!els.feedFilter) return;
+    FEED_FILTER = String(els.feedFilter.value || '').toLowerCase();
+    var ul = els.signalList;
+    if (!ul) return;
+    var items = ul.querySelectorAll('li');
+    for (var i = 0; i < items.length; i++) {
+      var txt = (items[i].textContent || '').toLowerCase();
+      items[i].hidden = !!(FEED_FILTER && txt.indexOf(FEED_FILTER) < 0);
+    }
+    if (els.feedCount) {
+      var vis = ul.querySelectorAll('li:not([hidden])').length;
+      els.feedCount.textContent = FEED_FILTER ? (vis + ' из ' + items.length) : String(items.length);
+    }
   }
 
   /* ---------- бейдж ---------- */
@@ -1532,6 +1552,28 @@
     if (els.selVolume) els.selVolume.value = String(CONFIG.ui.volume);
   }
 
+  /* ---------- новости со ссылками на разделы (v7.1) ----------
+     Метка раздела в новости — ссылка: «защита» ведёт в справку (карточка
+     «Защита обзвона»), «надзор» — в админку, «интерфейс» — в сеанс. */
+  on(document, 'click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('.news-area') : null;
+    if (!a) return;
+    e.preventDefault();
+    var view = a.getAttribute('data-view') || 'help';
+    var nav = document.querySelector('.nav-link[data-view="' + view + '"]');
+    if (nav) nav.click();
+    var anchor = a.getAttribute('data-anchor');
+    if (anchor) {
+      setTimeout(function () {
+        var t = document.getElementById(anchor);
+        if (t && t.scrollIntoView) t.scrollIntoView({ block: 'center' });
+      }, 250);
+    }
+  });
+
+  /* ---------- поиск по журналу (v7.1) ---------- */
+  if (els.feedFilter) on(els.feedFilter, 'input', feedFilter);
+
   /* ---------- полный экран ---------- */
   function goFullscreen() {
     var el = document.documentElement;
@@ -2452,6 +2494,12 @@
       .then(function (d) {
         if (d && d.v && d.v !== CONFIG.appVersion) {
           showUpdateBanner(d.v, d.notes || '');
+          /* новая версия — попросить воркер перезабрать офлайн-кэш */
+          try {
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ type: 'refresh' });
+            }
+          } catch (eSw) {}
         } else if (manual) {
           toast('Обновлений нет — установлена свежая версия ' + CONFIG.appVersion, 'good');
         }
@@ -2781,6 +2829,53 @@
         return null;
       });
   }
+  /* ---------- ОФЛАЙН-РЕЖИМ И САМООБНОВЛЕНИЕ (v7.1) ----------
+     Сайт кладёт себя в кэш браузера и продолжает работать без сети.
+     Появилась новая версия — сервис-воркер сам перезабирает файлы
+     и сообщает вкладкам; страница сама предлагает обновиться. */
+  var OFFLINE = { supported: false, ready: false, url: '' };
+  function initOffline() {
+    OFFLINE.supported = ('serviceWorker' in navigator) && location.protocol !== 'file:';
+    if (!OFFLINE.supported) { adminOfflineRender(); return; }
+    try {
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        OFFLINE.url = reg.scope || '';
+        if (navigator.serviceWorker.controller) OFFLINE.ready = true;
+        reg.addEventListener('updatefound', function () {
+          var sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', function () {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              OFFLINE.ready = true;
+              adminOfflineRender();
+            }
+          });
+        });
+        adminOfflineRender();
+      }).catch(function () { OFFLINE.supported = false; adminOfflineRender(); });
+    } catch (e) { OFFLINE.supported = false; adminOfflineRender(); }
+  }
+  /* попросить воркер обновить офлайн-кэш */
+  function refreshOffline() {
+    if (!OFFLINE.supported) { adminToast('Офлайн-режим не поддерживается этим браузером', ''); return false; }
+    try {
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (reg.active) reg.active.postMessage({ type: 'refresh' });
+      });
+      adminToast('Офлайн-кэш обновляется', 'good');
+      return true;
+    } catch (e) { return false; }
+  }
+  function adminOfflineRender() {
+    if (!els.adminOffline) return;
+    if (!OFFLINE.supported) {
+      els.adminOffline.innerHTML = 'офлайн-режим: <b>не поддерживается</b> (нужен https или localhost)';
+      return;
+    }
+    els.adminOffline.innerHTML = 'офлайн-режим: <b>' + (OFFLINE.ready ? 'готов — сайт работает без сети' : 'готовится…') +
+      '</b> · ' + esc(String(OFFLINE.url || ''));
+  }
+
   /* ---------- история применённых версий (v4.3) ----------
      Сайт записывает, какие версии он применял и когда. После
      фонового обновления в этом списке видно переход — это
@@ -3280,6 +3375,31 @@
     adminStatsRender();
     adminToast('Статистика обновлена', 'good');
   });
+  /* быстрые действия: вмешательство прямо из надзора (v7.1) */
+  if (els.btnAdminActPause) on(els.btnAdminActPause, 'click', function () {
+    if (ST.state !== 'running') { adminToast('Обзвон не идёт', ''); return; }
+    pauseSession();
+    adminToast('Обзвон поставлен на паузу', 'good');
+    adminWatchRender();
+  });
+  if (els.btnAdminActResume) on(els.btnAdminActResume, 'click', function () {
+    if (ST.state !== 'paused') { adminToast('Обзвон не на паузе', ''); return; }
+    resumeSession();
+    adminToast('Обзвон продолжен', 'good');
+    adminWatchRender();
+  });
+  if (els.btnAdminActEnd) on(els.btnAdminActEnd, 'click', function () {
+    if (['running', 'paused', 'locked'].indexOf(ST.state) < 0) { adminToast('Обзвон не идёт', ''); return; }
+    endSession();
+    adminToast('Обзвон завершён', 'good');
+    adminWatchRender();
+  });
+  if (els.btnAdminActUnlock) on(els.btnAdminActUnlock, 'click', function () {
+    if (ST.state !== 'locked') { adminToast('Блокировки нет', ''); return; }
+    els.lockOverlay.hidden = false;
+    adminToast('Введите код в окне блокировки', '');
+  });
+  if (els.btnAdminOffline) on(els.btnAdminOffline, 'click', refreshOffline);
   if (els.btnAdminDemo) on(els.btnAdminDemo, 'click', function () {
     var kind = els.selDemoKind ? els.selDemoKind.value : 'key';
     if (OBZ.demo(kind)) {
@@ -3427,6 +3547,10 @@
   if (window.Audit) Audit.init();
   if (window.Stats) Stats.init();   /* счётчик посещений */
   loadUi();                        /* настройки интерфейса */
+  initOffline();                   /* офлайн-режим (PWA) */
+  try { deviceSecret(); } catch (eSec) {}
+  /* секрет устройства нужен всегда: по нему считается подпись состояния
+     сессии, и без него её нельзя пересчитать «руками» */
   if (window.Profiles) Profiles.current();   /* профиль устройства */
   adminUiRender();
   adminAlarmRender();
