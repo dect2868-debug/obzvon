@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v6.3 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v6.4 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '6.3',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '6.4',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -54,7 +54,7 @@
     authLockMs: 30000,        // длительность блокировки ввода кода, мс
     threshold: 60,            // порог «читомеряка» по умолчанию (%)
     calibCount: 100,          // испытаний калибровки по умолчанию (до 100 — длинная проверка)
-    calibSpeed: 0.35,         // сложность калибровки: 0.35 = время на ответ короче на 65%
+    calibSpeed: 0.55,         // сложность калибровки: 0.55 = время на ответ короче на 45%
     chTimeout: 9000,          // базовый таймаут испытания, мс
     chDelayMin: 10000,        // (не используется — темп задаёт nextDelay)
     chDelayMax: 25000,
@@ -98,6 +98,10 @@
 
   /* таймауты по типам испытаний (мс) */
   var CH_TIMEOUTS = { key: 6750, target: 7500, hold: 10500, math: 9000, seq: 13500, stroop: 9000 };
+  /* минимальное время на ответ при калибровке (v6.1):
+     ниже этих значений испытание не проходит даже у быстрых людей —
+     из-за этого калибровка сбрасывалась на первом же провале */
+  var CALIB_MIN = { key: 2200, target: 2200, math: 3400, seq: 3800, stroop: 2400, hold: 2600 };
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -302,7 +306,8 @@
     'btnAdminCheck','btnAdminUpdate','btnAdminStress','btnAdminStressSmall','btnAdminPurge','adminStress','adminLock',
     'btnAuthAdmin','adminRoles','adminWatch','adminAudit','adminBuildInfo','adminCfgInfo',
     'adminNewCode','btnAdminRotate','btnAdminResetCode','btnAdminRefresh','btnAdminDump','btnAdminCfg','btnAdminAuditClear',
-    'adminCodeExport','adminPolicies','adminThreats','btnAdminPolicyReset','btnAdminIntegrity']
+    'adminCodeExport','adminPolicies','adminThreats','btnAdminPolicyReset','btnAdminIntegrity',
+    'adminStats','btnAdminStats']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- реестр слушателей и таймеров (v4.2) ----------
@@ -700,9 +705,14 @@
     if (calib) {
       to = kind === 'hold' ? CH.holdMs + Math.round(6750 * CONFIG.calibSpeed)
                            : Math.round(to * CONFIG.calibSpeed);
-      var step = Math.min(25, Math.floor(ST.calibDone / 20) * 5);
+      /* сжатие мягкое: -4% за каждые 25 испытаний, не больше -12% */
+      var step = Math.min(12, Math.floor(ST.calibDone / 25) * 4);
       to = Math.round(to * (1 - step / 100));
-      if (ST.calibDone >= CONFIG.calibCount - 10) to = Math.round(to * 0.85);
+      /* и не ниже минимума по виду испытания */
+      var minTo = CALIB_MIN[kind] || 2400;
+      if (kind === 'hold') minTo = CH.holdMs + (CALIB_MIN.hold || 2600);
+      if (kind === 'seq') minTo += CH.seqMs || 1400;   /* время показа не в счёт ответа */
+      if (to < minTo) to = minTo;
     }
     /* после 6-го испытания сессии таймауты жёстче на 20% */
     if (!calib && CH_SEANCE > 6) to = Math.round(to * 0.8);
@@ -724,8 +734,10 @@
     } else if (kind === 'seq') {
       CH.seq = '';
       /* в калибровке на 5 символов и показ короче на 0.5 с */
-      CH.seqMs = calib ? 1200 : 1700;
-      for (var i = 0; i < (calib ? 5 : 4); i++) CH.seq += ABC[rnd(0, ABC.length - 1)];
+      CH.seqMs = calib ? 1400 : 1700;
+      /* в калибровке столько же символов, сколько в сеансе (было на один больше —
+         при сжатом времени это было непроходимо) */
+      for (var i = 0; i < 4; i++) CH.seq += ABC[rnd(0, ABC.length - 1)];
       taskHtml = 'ЗАПОМНИТЕ: <b class="big">' + CH.seq.split('').join(' ') + '</b>';
       CH.timers.push(setTimeout(function () {
         if (!CH.active || CH.kind !== 'seq') return;
@@ -826,10 +838,13 @@
       logChallenge(true, reaction, '');
       if (CH.calib) {
         ST.calibDone++;
-        els.calibStatus.innerHTML = '<span class="good">испытание ' + ST.calibDone + '/' + CONFIG.calibCount + ' зачтено</span>';
+        ST.calibTry = 0;
+        els.calibStatus.innerHTML = '<span class="good">испытание ' + ST.calibDone + '/' +
+          CONFIG.calibCount + ' зачтено</span>';
         if (ST.calibDone >= CONFIG.calibCount) {
           ST.calibrated = true;
           ST.baseReaction = Monitor.avgReaction();  /* запоминаем базу реакции участника */
+          if (window.Stats) Stats.count('calib.pass');
           ST.state = 'idle';
           Monitor.setRunning(false);
           els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — можно начинать обзвон</span>';
@@ -845,16 +860,30 @@
         scheduleNext();
       }
     } else {
-      Monitor.addMiss();
+      Monitor.addMiss(CH.calib);   /* в калибровке провал не штрафуется */
       sndBad();
       els.chTask.innerHTML = 'ПРОВАЛ' + (note ? ' · ' + esc(note) : '') + '';
       logChallenge(false, null, note || '');
       document.querySelector('.playfield').classList.add('shake');
       setTimeout(function () { document.querySelector('.playfield').classList.remove('shake'); }, 400);
       if (CH.calib) {
+        /* v6.1: провал в калибровке больше не стирает весь прогресс —
+           повторяем то же испытание (после трёх попыток идём дальше) */
         ST.calibFails++;
-        toast('Испытание провалено — повторите калибровку', 'bad');
-        setTimeout(function () { ST.calibDone = 0; CH_LOG = []; updateTables(); els.calibStatus.innerHTML = '<span class="bad">калибровка не пройдена — попробуйте снова</span>'; ST.state = 'idle'; Monitor.setRunning(false); if (window.Live) Live.stop(); els.btnStart.disabled = !(ST.authed && ST.calibrated); }, 1200);
+        ST.calibTry = (ST.calibTry || 0) + 1;
+        var kindAgain = CH.kind;
+        var giveUp = ST.calibTry >= 3;
+        toast(giveUp ? 'Три попытки — идём дальше по калибровке'
+                     : 'Испытание провалено — повторяем', 'bad');
+        els.calibStatus.innerHTML = '<span class="bad">провал · пройдено ' + ST.calibDone +
+          '/' + CONFIG.calibCount + ' · попытка ' + ST.calibTry + '</span>';
+        setTimeout(function () {
+          if (ST.state !== 'calib') return;
+          ST.calibTry = giveUp ? 0 : ST.calibTry;
+          els.calibStatus.innerHTML = '<span class="good">продолжаем калибровку · ' +
+            ST.calibDone + '/' + CONFIG.calibCount + '</span>';
+          runChallenge(giveUp ? kindRoll(true) : kindAgain, true);
+        }, 1400);
       } else {
         toast('Испытание провалено! +8 к «читомеряку»', 'bad');
         scheduleNext();
@@ -1018,6 +1047,7 @@
     els.btnStart.disabled = true; els.btnPause.disabled = false; els.btnEnd.disabled = false;
     if (els.chkFsReq.checked) goFullscreen();
     feedAdd({ time: ts(), label: 'Обзвон начат · сессия ' + ST.sessionId, sev: 0 });
+    if (window.Stats) Stats.count('session.start');
     if (window.Audit) Audit.log('session.start', 'сессия ' + ST.sessionId);
     toast('Обзвон начат. Испытания будут появляться каждые 10–25 секунд', 'good');
     beep(660, 200, 'sine', .05);
@@ -1180,6 +1210,7 @@
     toast('Средняя концентрация обновлена: ' + totAvg + '%', 'good', 4200);
     feedAdd({ time: ts(), label: 'Обзвон завершён · вердикт: ' + verdict + ' · ср. концентрация ' + totAvg + '% · фишек: ' + achList.length, sev: verdict === 'ЗАЧЁТ' ? 0 : 2 });
     if (window.Audit) Audit.log('session.end', 'вердикт ' + verdict + ' · концентрация ' + totAvg + '%');
+    if (window.Stats) Stats.count('session.end');
     /* авто-выгрузка отчёта (политика autoReport) */
     if (CONFIG.policies.autoReport) {
       try { setTimeout(function () { downloadReport(); }, 1200); } catch (eAuto) {}
@@ -1553,6 +1584,7 @@
     data.policies = CONFIG.policies;
     data.audit = window.Audit ? Audit.report() : null;
     data.threats = THREATS.slice(0, 20);
+    data.stats = window.Stats ? Stats.snapshot() : null;
     /* контрольная сумма тела отчёта: видно, что отчёт не правили */
     data.sha256 = sha256hex(JSON.stringify(data));
     return data;
@@ -1856,8 +1888,10 @@
 
   on(els.btnCalibrate, 'click', function () {
     if (ST.state !== 'idle') { toast('Сейчас это недоступно', 'bad'); return; }
-    ST.state = 'calib'; ST.calibDone = 0; ST.calibFails = 0;
+    ST.state = 'calib'; ST.calibDone = 0; ST.calibFails = 0; ST.calibTry = 0;
     CH_LOG = [];           /* новая калибровка — чистый журнал */
+    CH_SEQ = 0;            /* и нумерация журнала с нуля (было: продолжалась старая) */
+    if (window.Stats) Stats.count('calib.start');
     updateTables();
     Monitor.setRunning(true);   /* на калибровке тоже ловим смену вкладок и уходы */
     /* график живой динамики включается сразу (v4.1) */
@@ -2122,7 +2156,7 @@
      обзвон не прерывается. Если что-то пошло не так — есть запасной
      вариант с обычной перезагрузкой. */
   var MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
-                 'js/archive.js', 'js/audit.js', 'js/health.js', 'js/app.js'];
+                 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/health.js', 'js/app.js'];
 
   function fallbackReload(v) {
     try {
@@ -2395,6 +2429,11 @@
       });
       applyPolicies();
     }
+    /* адрес сборщика статистики (того же хоста — иначе его закроет CSP) */
+    if (cfg.collect && typeof cfg.collect.url === 'string' && cfg.collect.url) {
+      if (window.Stats) Stats.setCollector(cfg.collect.url);
+      applied.push('сборщик статистики: ' + cfg.collect.url.slice(0, 60));
+    }
     if (typeof cfg.banner === 'string' && cfg.banner) {
       applied.push('объявление на странице');
       toast(cfg.banner, '', 7000);
@@ -2585,6 +2624,7 @@
     }
     adminPolicyRender();
     adminThreatRender();
+    adminStatsRender();
   }
   function adminToast(msg, cls) { toast(msg, cls || ''); }
 
@@ -2720,6 +2760,50 @@
           if (window.Audit) Audit.log('policy.set', k + ' = ' + v);
         });
       })(inputs[i]);
+    }
+  }
+
+  /* ---------- статистика в цифрах (v6.1) ---------- */
+  function adminStatsRender() {
+    if (!els.adminStats) return;
+    var s = window.Stats ? Stats.snapshot() : null;
+    if (!s) { els.adminStats.innerHTML = '<div class="watch-row"><span>СТАТИСТИКА</span><b>модуль не загружен</b></div>'; return; }
+    var c = s.counters;
+    function when(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
+    var rows = [
+      ['ОТКРЫТИЙ САЙТ', c.visits + ' раз(а)'],
+      ['УЧАСТНИКОВ (этот браузер)', s.people],
+      ['КАЛИБРОВОК НАЧАТО', c.calibrations],
+      ['КАЛИБРОВОК ПРОЙДЕНО', c.calibPassed],
+      ['ОБЗВОНОВ НАЧАТО', c.sessions],
+      ['ОБЗВОНОВ ЗАВЕРШЕНО', c.finished],
+      ['ПЕРВЫЙ ВИЗИТ', when(c.firstVisit)],
+      ['ПОСЛЕДНИЙ ВИЗИТ', when(c.lastVisit)]
+    ];
+    if (s.collector) {
+      rows.push(['СБОРЩИК', 'настроен · загружаю общие числа…']);
+    }
+    els.adminStats.innerHTML = rows.map(function (r) {
+      return '<div class="watch-row"><span>' + esc(r[0]) + '</span><b>' + esc(String(r[1])) + '</b></div>';
+    }).join('');
+    /* общие числа со сборщика (если он настроен) */
+    if (window.Stats && s.collector) {
+      Stats.globalStats().then(function (g) {
+        if (!g || !g.ok || !admin.authed || !els.adminStats) return;
+        var extra = [
+          ['ВСЕГО ЛЮДЕЙ', g.visitors !== undefined ? g.visitors : '—'],
+          ['ВСЕГО ВИЗИТОВ', g.visits !== undefined ? g.visits : '—'],
+          ['КАЛИБРОВОК (всего)', (g.events && g.events['calib.start']) || 0],
+          ['ОБЗВОНОВ (всего)', (g.events && g.events['session.start']) || 0]
+        ];
+        var html = els.adminStats.innerHTML.replace(
+          /<div class="watch-row"><span>СБОРЩИК<\/span><b>[^<]*<\/b><\/div>/,
+          extra.map(function (r) {
+            return '<div class="watch-row"><span>' + esc(r[0]) + '</span><b>' + esc(String(r[1])) + '</b></div>';
+          }).join('')
+        );
+        els.adminStats.innerHTML = html;
+      });
     }
   }
 
@@ -2918,6 +3002,10 @@
     adminToast('Локальные переопределения политик сброшены', 'good');
   });
   if (els.btnAdminIntegrity) on(els.btnAdminIntegrity, 'click', function () { loadIntegrity(true); });
+  if (els.btnAdminStats) on(els.btnAdminStats, 'click', function () {
+    adminStatsRender();
+    adminToast('Статистика обновлена', 'good');
+  });
   if (els.btnAdminAuditClear) on(els.btnAdminAuditClear, 'click', function () {
     if (window.Audit) { Audit.clear(); adminAuditRender(); }
     adminToast('Журнал действий очищен', 'good');
@@ -2925,6 +3013,7 @@
   /* живой надзор: обновляем раз в секунду, пока админка открыта */
   every(1000, function () { if (admin.authed) adminWatchRender(); });
   every(5000, function () { if (admin.authed) adminAuditRender(); });
+  every(10000, function () { if (admin.authed) adminStatsRender(); });
   if (els.btnAdminPurge) on(els.btnAdminPurge, 'click', function () {
     if (typeof window.confirm === 'function' && !/jsdom/i.test(navigator.userAgent || '')) {
       try { if (window.confirm('Удалить статистику, историю и состояние сессии? Действие необратимо.') === false) return; } catch (e) {}
@@ -2959,6 +3048,8 @@
     policies: function () { return CONFIG.policies; },
     /* журнал угроз (v6.0) */
     threats: function () { return THREATS.slice(); },
+    /* статистика посещений и обзвонов (v6.1) */
+    stats: function () { return window.Stats ? Stats.snapshot() : null; },
     /* настроены ли коды на этом хостинге */
     authReady: function () { return { curator: roleReady('curator'), admin: roleReady('admin') }; },
     /* журнал действий */
@@ -3015,6 +3106,7 @@
   };
 
   if (window.Audit) Audit.init();
+  if (window.Stats) Stats.init();   /* счётчик посещений */
   updateMetrics();
   updateTotalConcUI();
   restoreState();

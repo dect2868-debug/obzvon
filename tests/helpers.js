@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const { JSDOM, VirtualConsole } = require('jsdom');
 
 const ROOT = path.join(__dirname, '..');
-const SCRIPTS = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/audit.js', 'js/health.js', 'js/app.js'];
+const SCRIPTS = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js', 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/health.js', 'js/app.js'];
 
 function sha256(s) {
   return crypto.createHash('sha256').update(s, 'utf8').digest('hex');

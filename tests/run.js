@@ -10,6 +10,7 @@ const suites = [
   require('./security'),
   require('./roles'),
   require('./v6'),
+  require('./stats'),
   require('./load'),
   require('./build')
 ];

@@ -20,7 +20,7 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 const FILE = path.join(ROOT, 'integrity.json');
 const MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
-                 'js/archive.js', 'js/audit.js', 'js/health.js', 'js/app.js'];
+                 'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/health.js', 'js/app.js'];
 
 function fileHashes() {
   const out = {};
