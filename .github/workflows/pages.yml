@@ -6,6 +6,9 @@ name: Публикация ОБЗВОН (GitHub Pages)
 on:
   push:
     branches: [main]
+  schedule:
+    # подстраховка: подхватывает коммиты бота (их push не запускает workflow)
+    - cron: '41 5 * * *'
   workflow_dispatch:
 
 permissions:

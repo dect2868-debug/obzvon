@@ -21,6 +21,7 @@ on:
 permissions:
   contents: write   # коммит версии и status.json
   issues: write     # задача, если проверки не прошли
+  actions: write    # запуск публикации после коммита
 
 concurrency:
   group: self-maintain
@@ -106,6 +107,15 @@ jobs:
             git tag -f "v$V" -m "v$V" || true
             git push --force origin "refs/tags/v$V:refs/tags/v$V" || echo "тег не отправлен — не критично"
           fi
+
+      - name: Запустить публикацию сайта
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # push, сделанный токеном GITHUB_TOKEN, не запускает другие workflow —
+          # поэтому публикацию поднимаем вручную
+          gh workflow run pages.yml --ref main || echo "автозапуск публикации не удался — сайт обновится при следующем пуше"
 
       - name: Задача при сбое проверок
         if: failure()
