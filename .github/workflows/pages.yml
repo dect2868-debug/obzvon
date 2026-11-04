@@ -1,0 +1,65 @@
+name: Публикация ОБЗВОН (GitHub Pages)
+
+# Сайт публикуется из СБОРКИ, а не из ветки: в ветке нет кодов доступа
+# (они лежат вне репозитория и подставляются из секрета AUTH_LOCAL_B64).
+# Если опубликовать ветку как есть — входа в пульт и админку не будет.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Сборка и публикация
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Взять код
+        uses: actions/checkout@v4
+
+      - name: Подготовить Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Установить зависимости
+        run: npm ci --no-audit --no-fund
+
+      - name: Проверки
+        run: |
+          node tools/doctor.js
+          npm test
+
+      - name: Пересчитать отпечаток файлов
+        run: node tools/integrity.js
+
+      - name: Собрать сайт с кодами доступа
+        env:
+          AUTH_LOCAL_B64: ${{ secrets.AUTH_LOCAL_B64 }}
+        run: |
+          npm run build
+          node tools/inject-auth.js --check
+
+      - name: Настроить Pages
+        id: config
+        uses: actions/configure-pages@v5
+
+      - name: Загрузить артефакт
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Опубликовать
+        id: deploy
+        uses: actions/deploy-pages@v4

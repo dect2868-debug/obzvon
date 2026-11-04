@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v5.3 :: MONITOR  (детект нарушений + система кандидата)
+   ОБЗВОН v6.0 :: MONITOR  (детект нарушений + система кандидата)
    v4.0: авто-тесты браузера, захват экрана (WebRTC), вторая
    вкладка, подмена часов, пауза-отладчик, расширенный список
    блокируемых сочетаний.
@@ -60,9 +60,14 @@ window.Monitor = (function () {
     return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
   }
 
+  /* мягкий режим (v6.0): нарушения фиксируются, но не штрафуют
+     (тренировка, проверка настройки, «мягкий» обзвон) */
+  var SOFT = false;
+  function setSoft(on) { SOFT = !!on; return SOFT; }
+
   function emit(type, label, weight, sev) {
     if (!S.running) return;
-    S.score = Math.min(150, S.score + weight);
+    S.score = Math.min(150, S.score + (SOFT ? 0 : weight));
     S.viol.push({ t: now(), type: type, label: label, weight: weight });
     /* журнал нарушений ограничен — иначе при «флуде» событий страница
        раздувается и localStorage переполняется (v4.0) */
@@ -607,7 +612,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-5.3',
+      version: 'OBZVON-6.0',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,
@@ -698,7 +703,7 @@ window.Monitor = (function () {
     addReaction: addReaction, addMiss: addMiss, addReloadGuardPenalty: addReloadGuardPenalty,
     detect: detect, report: report, reset: reset, cheatPercent: cheatPercent,
     concentration: concentration, focusRatio: focusRatio, avgReaction: avgReaction,
-    penalty: penalty, setBaseline: setBaseline,
+    penalty: penalty, setBaseline: setBaseline, setSoft: setSoft,
     restore: restore, addTamper: addTamper, setStrict: setStrict,
     restart: restart, stop: stop, lastTickAt: lastTickAt,
     /* защита v4.0 — наружу, чтобы проверки можно было запускать из тестов */

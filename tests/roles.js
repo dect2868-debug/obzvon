@@ -272,17 +272,17 @@ s.test('PBKDF2 в коде совпадает с эталоном (соль + и
   eq(mine, ref, 'pbkdf2 не совпал с эталоном');
 });
 
-s.test('в CONFIG нет открытых кодов — только хеши', () => {
-  const m = appCode.match(/passHash:\s*'([0-9a-f]+)'/);
-  assert(m, 'нет passHash');
-  eq(m[1].length, 64, 'хеш куратора должен быть sha256 (64 символа)');
-  const a = appCode.match(/adminHash:\s*'([0-9a-f]+)'/);
-  assert(a, 'нет adminHash');
-  eq(a[1].length, 64, 'хеш администратора должен быть sha256 (64 символа)');
-  assert(a[1] !== m[1], 'коды куратора и администратора не должны совпадать');
-  /* соль и итерации заданы — значит код хранится в усиленном виде */
-  assert(/adminSalt:\s*'[0-9a-f]+'/.test(appCode), 'нет соли для кода администратора');
-  assert(/adminIter:\s*\d{4,}/.test(appCode), 'нет числа итераций PBKDF2');
+s.test('в репозитории нет открытых кодов — только хеши вне репозитория', () => {
+  /* v6.0: хешей кодов в исходниках нет вообще — они живут в auth.local.json */
+  const m = appCode.match(/passHash:\s*'([^']*)'/);
+  assert(m, 'в CONFIG нет поля passHash');
+  eq(m[1], '', 'в CONFIG снова появился хеш кода куратора');
+  const a = appCode.match(/adminHash:\s*'([^']*)'/);
+  assert(a, 'в CONFIG нет поля adminHash');
+  eq(a[1], '', 'в CONFIG снова появился хеш кода администратора');
+  /* файл кодов подключается к странице */
+  assert(/js\/auth\.local\.js/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')),
+    'страница не подключает файл кодов');
 });
 
 module.exports = s;

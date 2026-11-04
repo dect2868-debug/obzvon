@@ -249,11 +249,14 @@ s.test('в открытом API нет доступа к коду куратор
   const api = Object.keys(t.win.OBZ || {});
   ['auth', 'authenticate', 'pass', 'passHash', 'start', 'end', 'reset', 'setState']
     .forEach((k) => assert(api.indexOf(k) < 0, 'в OBZ есть опасный метод: ' + k));
-  /* в исходниках нет открытого кода куратора — только хеш */
+  /* v6.0: в исходниках вообще нет хешей кодов — они лежат вне репозитория */
   const src = appCode;
-  const m = src.match(/passHash:\s*'([^']+)'/);
-  assert(m, 'нет passHash');
-  eq(m[1].length, 64, 'passHash должен быть sha256 (64 символа)');
+  const m = src.match(/passHash:\s*'([^']*)'/);
+  assert(m, 'в CONFIG нет поля passHash');
+  eq(m[1], '', 'в исходниках снова появился хеш кода куратора');
+  const a = src.match(/adminHash:\s*'([^']*)'/);
+  assert(a, 'в CONFIG нет поля adminHash');
+  eq(a[1], '', 'в исходниках снова появился хеш кода администратора');
   t.close();
 });
 

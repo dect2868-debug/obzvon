@@ -45,8 +45,8 @@ copyDir(path.join(ROOT, 'css'), path.join(DIST, 'css'));
 copyDir(path.join(ROOT, 'js'), path.join(DIST, 'js'));
 fs.copyFileSync(path.join(ROOT, 'version.json'), path.join(DIST, 'version.json'));
 fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(DIST, 'index.html'));
-/* конфигурация и статус автоподдержки (v5.0) — сайт читает их сам */
-for (const extra of ['config.json', 'status.json']) {
+/* конфигурация, статус автоподдержки и отпечаток файлов (v5.0–v6.0) — сайт читает их сам */
+for (const extra of ['config.json', 'status.json', 'integrity.json']) {
   const p = path.join(ROOT, extra);
   if (fs.existsSync(p)) fs.copyFileSync(p, path.join(DIST, extra));
 }
@@ -62,6 +62,18 @@ single = single.replace(
   /<link rel="stylesheet" href="css\/styles\.css\?v=[^"]+"\s*\/>/,
   '<style>\n' + css + '\n</style>'
 );
+
+/* коды доступа — внутрь (иначе в однофайловой версии вход не работает) */
+const authPath = path.join(ROOT, 'js', 'auth.local.js');
+if (fs.existsSync(authPath)) {
+  const authCode = fs.readFileSync(authPath, 'utf8').replace(/<\/script/gi, '<\\/script');
+  single = single.replace(
+    /<script src="js\/auth\.local\.js\?v=[^"]+"><\/script>/,
+    '<script nonce="' + nonce + '">\n' + authCode + '\n</script>'
+  );
+} else {
+  console.error('ВНИМАНИЕ: js/auth.local.js не найден — в однофайловой версии входа не будет');
+}
 
 /* логотип — data:URI */
 const logoUri = 'data:image/svg+xml;base64,' + Buffer.from(logoSvg, 'utf8').toString('base64');
@@ -92,6 +104,13 @@ if (process.platform === 'win32') {
 } else {
   execFileSync('sh', ['-c', 'cd "' + DIST + '" && zip -rq "' + zip + '" .'], { stdio: 'pipe' });
 }
+
+/* ---------- коды доступа (v6.0) ----------
+   В репозитории их нет: файл auth.local.json лежит локально, в CI — в секрете.
+   Здесь он попадает в готовый сайт (dist/), чтобы вход работал. */
+try {
+  require('child_process').execFileSync(process.execPath, [path.join(ROOT, 'tools', 'inject-auth.js')], { cwd: ROOT, stdio: 'pipe' });
+} catch (e) { console.error('коды доступа не внедрены: ' + e.message); }
 
 const size = (f) => (fs.existsSync(f) ? (fs.statSync(f).size / 1024).toFixed(1) + ' КБ' : '—');
 console.log('Сборка готова:');

@@ -146,26 +146,39 @@ if (vj) {
   else ok('открытых паролей и токенов в коде нет');
 }
 
-/* ---------- 7. роли и коды ---------- */
+/* ---------- 7. роли и коды (v6.0: коды живут вне репозитория) ---------- */
 {
   const app = read('js/app.js');
   const grab = (k) => { const m = app.match(new RegExp(k + ":\\s*'([^']*)'")); return m ? m[1] : ''; };
-  const grabNum = (k) => { const m = app.match(new RegExp(k + ":\\s*(\\d+)")); return m ? parseInt(m[1], 10) : 0; };
-  const pass = grab('passHash'), admin = grab('adminHash');
-  if (!pass) err('не задан код куратора (passHash)');
-  else if (pass.length !== 64) err('passHash должен быть sha256 (64 символа)');
-  if (!admin) err('не задан код тех. администратора (adminHash)');
-  else {
-    if (admin.length !== 64) err('adminHash должен быть sha256 (64 символа)');
-    if (admin === pass) err('код куратора и код тех. администратора совпадают — должны быть РАЗНЫЕ');
+  /* в исходниках хешей быть не должно — это проверяет пункт 12 */
+  if (grab('passHash') || grab('adminHash')) {
+    err('в CONFIG снова появились хеши кодов — коды должны быть только в auth.local.json');
   }
-  if (!grab('adminSalt') || grabNum('adminIter') < 10000) {
-    warn('код администратора хранится как простой sha256 — усилите: node tools/passgen.js "КОД" --admin');
+  /* локальный файл кодов (в репозитории его нет) */
+  const authFile = path.join(ROOT, 'js', 'auth.local.js');
+  if (!fs.existsSync(authFile)) {
+    warn('нет js/auth.local.js — коды на этом компьютере не настроены (нужен node tools/passgen.js --emit)');
+  } else {
+    const code = fs.readFileSync(authFile, 'utf8');
+    const m = code.match(/window\.OBZ_AUTH\s*=\s*(\{[\s\S]*?\});/);
+    if (!m) {
+      err('js/auth.local.js не разбирается — проверьте формат файла');
+    } else {
+      let roles = {};
+      try { roles = JSON.parse(m[1]); } catch (e) { err('js/auth.local.js: нечитаемый JSON'); }
+      const cur = roles.curator || {}, adm = roles.admin || {};
+      const strong = (c) => !!(c && c.hash && c.salt && c.iter);
+      const legacy = (c) => !!(c && c.legacyHash);
+      if (!cur.hash && !cur.legacyHash) err('код куратора не настроен (auth.local.json)');
+      if (!adm.hash && !adm.legacyHash) err('код тех. администратора не настроен (auth.local.json)');
+      if (strong(cur) && strong(adm) && cur.hash === adm.hash) {
+        err('код куратора и код тех. администратора совпадают — должны быть РАЗНЫЕ');
+      }
+      if (legacy(cur)) warn('код куратора в старом формате (sha256) — перевыпустите: node tools/passgen.js --emit --curator --code "КОД"');
+      if (legacy(adm)) warn('код администратора в старом формате (sha256) — перевыпустите: node tools/passgen.js --emit --admin --code "КОД"');
+      if (strong(cur) && strong(adm)) ok('коды ролей настроены в усиленном виде (PBKDF2) и различаются');
+    }
   }
-  if (!grab('passSalt')) {
-    warn('код куратора хранится как простой sha256 — усилите: node tools/passgen.js "КОД"');
-  }
-  if (pass && admin && pass !== admin && admin.length === 64) ok('коды ролей заданы и различаются');
 }
 
 /* ---------- 8. синтаксис модулей ---------- */
@@ -210,6 +223,39 @@ if (vj) {
     } catch (e) { err('config.json не читается: ' + e.message); }
   }
   if (!exists('status.json')) warn('нет status.json — состояние автоподдержки не покажется');
+}
+
+/* ---------- 12. в репозитории нет кодов доступа (v6.0) ---------- */
+{
+  /* а) в исходниках не должно быть присваиваний хешей кодов */
+  const files = [...MODULES, 'index.html', 'tools/passgen.js', 'tools/inject-auth.js',
+    'tools/doctor.js', 'tools/bump.js', 'tools/build.js', 'tools/integrity.js',
+    'tests/helpers.js', 'tests/roles.js', 'README.md', 'docs/ADMIN.md'];
+  const hits = [];
+  const re = /(?:passHash|adminHash|legacyHash|authHash|hash)\s*:\s*'([0-9a-f]{32,})'/gi;
+  files.forEach((f) => {
+    if (!exists(f)) return;
+    const m = read(f).match(re);
+    if (m) hits.push(f + ' (' + m.length + ')');
+  });
+  if (hits.length) err('в исходниках видны хеши кодов доступа: ' + hits.join(', '));
+  else ok('в исходниках нет хешей кодов доступа');
+
+  /* б) файлы с кодами не должны отслеживаться git */
+  try {
+    const { execFileSync } = require('child_process');
+    const out = execFileSync('git', ['ls-files', '--', 'auth.local.json', 'js/auth.local.js', 'пароль*'],
+      { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    if (out) err('файлы с кодами отслеживаются git — их надо убрать: ' + out.split('\n').join(', '));
+    else ok('файлы с кодами не отслеживаются git');
+  } catch (eGit) {
+    warn('не удалось проверить git-состояние файлов с кодами');
+  }
+  /* в) в .gitignore должны быть файлы с кодами */
+  const gi = read('.gitignore');
+  ['auth.local.json', 'js/auth.local.js'].forEach((f) => {
+    if (gi.indexOf(f) < 0) err('в .gitignore нет ' + f + ' — коды могут утечь в репозиторий');
+  });
 }
 
 /* ---------- итог ---------- */

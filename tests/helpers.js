@@ -17,6 +17,11 @@ function sha256(s) {
   return crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 }
 
+/* PBKDF2-HMAC-SHA256 — так же, как в самом сайте (v6.0) */
+function pbkdf2(pwd, saltHex, iter) {
+  return crypto.pbkdf2Sync(pwd, Buffer.from(saltHex, 'hex'), iter, 32, 'sha256').toString('hex');
+}
+
 /* --- мок 2D-контекста canvas (jsdom без пакета canvas) --- */
 function mockCtx() {
   const noop = () => {};
@@ -142,22 +147,22 @@ function boot(opts = {}) {
   const win = dom.window;
   openWindows.push(win);
 
-  /* --- подмена хеша кода куратора (только в памяти теста) --- */
+  /* --- коды ролей (v6.0): задаются файлом js/auth.local.js, которого в
+         репозитории нет. В тестах подставляем его прямо в память окна. --- */
+  const TEST_SALT = '00112233445566778899aabbccddeeff';
+  const TEST_ITER = 1000;   /* в тестах итераций мало — скорость важнее */
+  const authRoles = {
+    curator: { hash: pbkdf2(opts.pass || 'test-pass', TEST_SALT, TEST_ITER), salt: TEST_SALT, iter: TEST_ITER },
+    admin: { hash: pbkdf2(opts.adminPass || 'admin-test-pass', TEST_SALT, TEST_ITER), salt: TEST_SALT, iter: TEST_ITER }
+  };
+  if (opts.legacyCurator) {
+    /* старый формат: sha256 без соли (как было до v6.0) */
+    authRoles.curator = { legacyHash: sha256(opts.pass || 'test-pass') };
+  }
+  win.eval('window.OBZ_AUTH = ' + JSON.stringify(authRoles) + ';\n//# sourceURL=auth.local.js');
+
   for (const f of SCRIPTS) {
-    let code = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    if (opts.pass && f === 'js/app.js') {
-      code = code.replace(
-        /passHash:\s*'[0-9a-f]+'/,
-        "passHash: '" + sha256(opts.pass) + "'"
-      );
-    }
-    /* код тех. администратора — отдельный (v5.0) */
-    if (f === 'js/app.js') {
-      code = code
-        .replace(/adminHash:\s*'[0-9a-f]+'/, "adminHash: '" + sha256(opts.adminPass || 'admin-test-pass') + "'")
-        .replace(/adminSalt:\s*'[^']*'/, "adminSalt: ''")
-        .replace(/adminIter:\s*\d+/, 'adminIter: 0');
-    }
+    const code = fs.readFileSync(path.join(ROOT, f), 'utf8');
     win.eval(code + '\n//# sourceURL=' + f);
   }
 

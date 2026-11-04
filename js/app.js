@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v5.3 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v6.0 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,22 +32,23 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '5.3',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '6.0',        // версия (должна совпадать с version.json и ?v= в index.html)
 
-    /* ---------- КОДЫ ДОСТУПА (v5.0) ----------
-       У КУРАТОРА и ТЕХ. АДМИНИСТРАТОРА РАЗНЫЕ коды:
-         passHash  — код куратора  (пульт обзвона: старт/пауза/итог)
-         adminHash — код тех. администратора (надзор, админка, обновления)
-       Открытым текстом коды в коде НЕ хранятся — только хеш.
-       Надёжный вариант — PBKDF2-HMAC-SHA256 (соль + 150 000 итераций):
-         node tools/passgen.js "ваш код"
-       Там же — проверка, что код записан верно. */
-    passHash: '91abc2e5f9e39d327e30372efe2d6ff2733374b120d4e7db9ca595e9b503c48f',
-    passSalt: '',             // соль для PBKDF2 (пусто = старый sha256)
+        /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
+       Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
+       Источники (по порядку):
+         1) localStorage этого устройства — смена кода из админки;
+         2) window.OBZ_AUTH — файл js/auth.local.js (вне репозитория,
+            собирается на сервере или в CI из секретов);
+         3) эти поля — только если автор вписал вручную (не рекомендуется).
+       Формат: PBKDF2-HMAC-SHA256 (соль + 150 000 итераций). Старый sha256
+       больше не принимается — его перебирают за секунды. */
+    passHash: '',             // код куратора (пусто = берётся из auth.local.js)
+    passSalt: '',
     passIter: 0,
-    adminHash: '39de49a80246571c0c5ef0f1fdbd2baebb8e911765d6fcabba9abdf2b18bd3c0',
-    adminSalt: 'e26811268f06b14cdaf36cd190d170c3',
-    adminIter: 150000,
+    adminHash: '',            // код тех. администратора
+    adminSalt: '',
+    adminIter: 0,
 
     authFailsLimit: 5,        // неверных попыток до блокировки ввода
     authLockMs: 30000,        // длительность блокировки ввода кода, мс
@@ -73,7 +74,18 @@
       audit: true             // вести журнал действий
     },
     configUrl: 'config.json',  // удалённая конфигурация (функции и настройки)
-    statusUrl: 'status.json'   // состояние автоподдержки (пишет CI на GitHub)
+    statusUrl: 'status.json',  // состояние автоподдержки (пишет CI на GitHub)
+    integrityUrl: 'integrity.json', // опубликованный отпечаток файлов
+    /* ---------- ПОЛИТИКИ ВМЕШАТЕЛЬСТВА (v6.0) ----------
+       Что система делает сама при нарушениях и как работает с участником.
+       Часть приходит из config.json — меняется без обновления кода. */
+    policies: {
+      autoPause: false,      // авто-пауза при нарушении во время испытания
+      softMode: false,       // мягкий режим: нарушения пишутся, но не штрафуются
+      autoReport: false,     // авто-выгрузка отчёта в конце обзвона
+      maxAttempts: 5,        // лимит неудачных попыток входа
+      reminder: ''           // напоминание о расписании обзвона
+    }
   };
 
   /* ---------- РОЛИ (v5.0) ----------
@@ -220,26 +232,52 @@
     try { localStorage.setItem(CODES_KEY, JSON.stringify(obj)); } catch (e) {}
   }
   function roleCode(role) {
+    /* 1) код, заданный на этом устройстве (ротация из админки) */
     var loc = localCodes()[role];
     if (loc && loc.hash) return loc;
+    /* 2) файл js/auth.local.js — вне репозитория */
+    var file = (window.OBZ_AUTH && window.OBZ_AUTH[role]) || null;
+    if (file && (file.hash || file.legacyHash)) return file;
+    /* 3) ручная настройка в CONFIG (не рекомендуется) */
     if (role === 'admin') {
       return { hash: CONFIG.adminHash, salt: CONFIG.adminSalt, iter: CONFIG.adminIter };
     }
     return { hash: CONFIG.passHash, salt: CONFIG.passSalt, iter: CONFIG.passIter };
   }
-  /* проверка кода роли: PBKDF2 (если задана соль) либо старый sha256 */
+  /* проверка кода роли.
+     Основной формат — PBKDF2 (соль + итерации): перебор опубликованного
+     хеша практически невозможен.
+     Старый формат (sha256 без соли) принимается ТОЛЬКО из файла вне
+     репозитория и только пока код не перевыпущен: такой хеш перебирают
+     за секунды. В CONFIG его быть не может — репозиторий публичный. */
   function roleMatch(role, input) {
     if (!input || !role) return false;
     var c = roleCode(role);
-    if (!c || !c.hash) return false;
-    var want = String(c.hash).toLowerCase();
-    if (c.salt && c.iter) return pbkdf2hex(input, c.salt, c.iter, 32) === want;
-    return sha256hex(input) === want;
+    if (!c) return false;
+    if (c.salt && c.iter && c.hash) {
+      return pbkdf2hex(input, c.salt, c.iter, 32) === String(c.hash).toLowerCase();
+    }
+    if (c.legacyHash) {
+      return sha256hex(input) === String(c.legacyHash).toLowerCase();
+    }
+    return false;
   }
-  /* «слабый» код (простой sha256 без соли) — предупреждаем тех. администратора */
+  /* роль настроена в усиленном виде (PBKDF2)? */
+  function roleReady(role) {
+    var c = roleCode(role);
+    return !!(c && c.hash && c.salt && c.iter);
+  }
+  /* роль настроена вовсе (в любом формате)? */
+  function roleConfigured(role) {
+    var c = roleCode(role);
+    return !!(c && (c.hash || c.legacyHash));
+  }
+  /* роль работает, но в старом формате (sha256) — её надо перевыпустить */
   function codeIsWeak(role) {
     var c = roleCode(role);
-    return !!(c && c.hash && !(c.salt && c.iter));
+    if (!c) return false;
+    if (c.hash && c.salt && c.iter) return false;
+    return !!(c.legacyHash || c.hash);
   }
   function passMatch(input) { return roleMatch('curator', input); }
   var els = {};
@@ -264,7 +302,7 @@
     'btnAdminCheck','btnAdminUpdate','btnAdminStress','btnAdminStressSmall','btnAdminPurge','adminStress','adminLock',
     'btnAuthAdmin','adminRoles','adminWatch','adminAudit','adminBuildInfo','adminCfgInfo',
     'adminNewCode','btnAdminRotate','btnAdminResetCode','btnAdminRefresh','btnAdminDump','btnAdminCfg','btnAdminAuditClear',
-    'adminCodeExport']
+    'adminCodeExport','adminPolicies','adminThreats','btnAdminPolicyReset','btnAdminIntegrity']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- реестр слушателей и таймеров (v4.2) ----------
@@ -1142,6 +1180,10 @@
     toast('Средняя концентрация обновлена: ' + totAvg + '%', 'good', 4200);
     feedAdd({ time: ts(), label: 'Обзвон завершён · вердикт: ' + verdict + ' · ср. концентрация ' + totAvg + '% · фишек: ' + achList.length, sev: verdict === 'ЗАЧЁТ' ? 0 : 2 });
     if (window.Audit) Audit.log('session.end', 'вердикт ' + verdict + ' · концентрация ' + totAvg + '%');
+    /* авто-выгрузка отчёта (политика autoReport) */
+    if (CONFIG.policies.autoReport) {
+      try { setTimeout(function () { downloadReport(); }, 1200); } catch (eAuto) {}
+    }
     clearState();
   }
 
@@ -1365,8 +1407,21 @@
      Секрет выводится из хеша кода куратора, поэтому в исходниках его
      нет в открытом виде. Подпись защищает от правки localStorage:
      «почистить» штрафы в хранилище больше не получится. */
+  /* Секрет подписи состояния (v6.0): свой на каждое устройство.
+     Раньше он выводился из кода куратора — значит, попадал в репозиторий
+     и позволял подделать сохранённое состояние сессии. */
+  var SECRET_KEY = 'obzvon_v2_secret';
+  function deviceSecret() {
+    var s = '';
+    try { s = localStorage.getItem(SECRET_KEY) || ''; } catch (e) {}
+    if (!s || s.length < 32) {
+      s = bytesToHex(randomBytes(32));
+      try { localStorage.setItem(SECRET_KEY, s); } catch (e) {}
+    }
+    return s;
+  }
   function stateSecret() {
-    return sha256hex(CONFIG.passHash + '|obzvon|v4|integrity|' + CONFIG.appVersion);
+    return sha256hex(deviceSecret() + '|obzvon|v6|integrity|' + CONFIG.appVersion);
   }
   function statePayload() {
     return {
@@ -1466,6 +1521,7 @@
     if (tampered) {
       ST.integrityOk = false;
       Monitor.addTamper('Подмена сохранённых данных сессии (подпись не совпала)', 20);
+      threat('tamper', 'Подмена сохранённых данных сессии');
       feedAdd({ time: ts(), label: 'Подмена данных сессии — подпись не совпала (+20)', sev: 2 });
       toast('Обнаружена подмена данных сессии! +20 к «читомеряку»', 'bad', 6000);
     }
@@ -1483,7 +1539,9 @@
   every(2500, saveState);
 
   /* ---------- отчёт ---------- */
-  function downloadReport() {
+  /* отчёт собирается отдельно от выгрузки (v6.0): так его можно
+     получить и проверить, не скачивая файл */
+  function buildReport() {
     var data = Monitor.report({ session: ST.sessionId, verdict: els.sumVerdict.textContent || null });
     data.appVersion = 'v' + CONFIG.appVersion;
     data.totals = loadTotals();
@@ -1491,6 +1549,16 @@
     data.achievements = (loadTotals().ach) || {};
     data.sessionStartedAt = ST.sessionStartAt ? new Date(ST.sessionStartAt).toISOString() : null;
     data.memory = memStats();
+    data.role = ST.role;
+    data.policies = CONFIG.policies;
+    data.audit = window.Audit ? Audit.report() : null;
+    data.threats = THREATS.slice(0, 20);
+    /* контрольная сумма тела отчёта: видно, что отчёт не правили */
+    data.sha256 = sha256hex(JSON.stringify(data));
+    return data;
+  }
+  function downloadReport() {
+    var data = buildReport();
     if (window.Live) data.live = Live.data();
     if (window.Archive) data.history = Archive.list();
     if (window.Health) {
@@ -1601,6 +1669,7 @@
       toast('Неверный код доступа · осталось попыток: ' + left, 'bad');
     }
     if (window.Audit) Audit.log('auth.fail', label + ' · неверный код');
+    threat('auth', label + ' — неверный код');
   }
   function isAdmin() { return ST.role === 'admin'; }
 
@@ -1645,6 +1714,30 @@
   }
 
   on(els.btnStart, 'click', startSession);
+
+  /* ---------- горячие клавиши куратора (v6.0) ----------
+     Пробел — пауза/продолжить, E — завершить, R — отчёт, A — админка.
+     Во время испытания клавиши не перехватываются: там отвечает участник. */
+  on(document, 'keydown', function (e) {
+    if (!ST.authed) return;
+    if (CH.active) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+    var k = String(e.key || '').toLowerCase();
+    if (k === ' ' || e.code === 'Space') {
+      if (ST.state === 'running') { e.preventDefault(); pauseSession(); }
+      else if (ST.state === 'paused') { e.preventDefault(); resumeSession(); }
+    } else if (k === 'e' || k === 'у') {
+      if (['running', 'paused', 'locked'].indexOf(ST.state) >= 0) { e.preventDefault(); endSession(); }
+    } else if (k === 'r' || k === 'к') {
+      e.preventDefault(); downloadReport();
+    } else if (k === 'a' || k === 'ф') {
+      e.preventDefault();
+      var link = document.querySelector('.nav-link[data-view="health"]');
+      if (link) link.click();
+    }
+  });
 
   /* логотип: счётчик нажатий (для аналитики дублей кликов) */
   (function () {
@@ -1780,6 +1873,7 @@
   Monitor.start({
     violation: function (item) {
       feedAdd(item);
+      threat(item.type || 'viol', item.label);
       toast(item.label + '  (+' + item.weight + ')', item.sev >= 2 ? 'bad' : '');
       document.body.classList.add('shake');
       setTimeout(function () { document.body.classList.remove('shake'); }, 400);
@@ -1794,6 +1888,12 @@
                  item.sev >= 2 ? '#ff4d6d' : '#ffb84d');
       }
       if (shouldLock()) lockSession();
+      /* авто-пауза при нарушении во время испытания (политика autoPause) */
+      if (CONFIG.policies.autoPause && CH.active && ST.state === 'running') {
+        pauseSession();
+        feedAdd({ time: ts(), label: 'Авто-пауза: нарушение во время испытания', sev: 1 });
+        toast('Обзвон поставлен на паузу автоматически', '', 4000);
+      }
     },
     focus: updateMetrics,
     tick: function () {
@@ -2171,6 +2271,7 @@
     if (fp !== codeBase) {
       codeBase = fp;
       Monitor.penalty('Вмешательство в код', 6, 3);
+      threat('code', 'Вмешательство в код страницы', 2);
       toast('Обнаружено вмешательство в код страницы', 'bad', 6000);
       feedAdd({ time: ts(), label: 'Проверка целостности кода: несовпадение', sev: 2 });
       ST.integrityOk = false;
@@ -2179,6 +2280,7 @@
     var broken = domIntegrity();
     if (broken) {
       Monitor.penalty(broken, 10, 2);
+      threat('dom', broken, 2);
       toast(broken, 'bad', 6000);
       feedAdd({ time: ts(), label: 'Проверка целостности страницы: ' + broken, sev: 2 });
       ST.integrityOk = false;
@@ -2278,15 +2380,72 @@
       });
       if (window.Monitor && Monitor.setStrict) Monitor.setStrict(!!CONFIG.features.strict);
     }
+    if (cfg.policies && typeof cfg.policies === 'object') {
+      Object.keys(cfg.policies).forEach(function (k) {
+        if (!Object.prototype.hasOwnProperty.call(CONFIG.policies, k)) return;
+        var v = cfg.policies[k];
+        if (typeof CONFIG.policies[k] === 'number') {
+          if (typeof v === 'number' && isFinite(v)) CONFIG.policies[k] = v;
+        } else if (typeof CONFIG.policies[k] === 'string') {
+          if (typeof v === 'string') CONFIG.policies[k] = v.slice(0, 300);
+        } else if (typeof CONFIG.policies[k] === 'boolean') {
+          CONFIG.policies[k] = !!v;
+        }
+        applied.push('политика ' + k + ' = ' + v);
+      });
+      applyPolicies();
+    }
     if (typeof cfg.banner === 'string' && cfg.banner) {
       applied.push('объявление на странице');
       toast(cfg.banner, '', 7000);
+    }
+    if (typeof cfg.reminder === 'string' && cfg.reminder) {
+      applied.push('напоминание: ' + cfg.reminder.slice(0, 80));
+      try { toast('⏰ ' + cfg.reminder, '', 9000); } catch (eRem) {}
     }
     if (Array.isArray(cfg.news) && cfg.news.length) {
       var n = applyRemoteNews(cfg.news);
       if (n) applied.push('новостей: ' + n);
     }
     return applied;
+  }
+
+  /* ---------- ПОЛИТИКИ (v6.0) ----------
+     Значение политики: локальное переопределение (админка) → config.json →default.
+     Локальное переопределение живёт в localStorage этого устройства. */
+  var POLICY_KEY = 'obzvon_v2_policies';
+  function policyOverrides() {
+    try {
+      var d = JSON.parse(localStorage.getItem(POLICY_KEY) || '{}');
+      return (d && typeof d === 'object') ? d : {};
+    } catch (e) { return {}; }
+  }
+  function policyValue(k) {
+    var o = policyOverrides();
+    if (Object.prototype.hasOwnProperty.call(o, k)) return o[k];
+    return CONFIG.policies[k];
+  }
+  function setPolicy(k, v) {
+    var o = policyOverrides();
+    o[k] = v;
+    try { localStorage.setItem(POLICY_KEY, JSON.stringify(o)); } catch (e) {}
+    applyPolicies();
+    adminPolicyRender();
+  }
+  function resetPolicies() {
+    try { localStorage.removeItem(POLICY_KEY); } catch (e) {}
+    applyPolicies();
+    adminPolicyRender();
+  }
+  /* применение политик к системе */
+  function applyPolicies() {
+    CONFIG.policies.autoPause = !!policyValue('autoPause');
+    CONFIG.policies.softMode = !!policyValue('softMode');
+    CONFIG.policies.autoReport = !!policyValue('autoReport');
+    CONFIG.policies.reminder = String(policyValue('reminder') || '');
+    var att = parseInt(policyValue('maxAttempts'), 10);
+    if (att >= 1 && att <= 20) CONFIG.authFailsLimit = att;
+    if (window.Monitor && Monitor.setSoft) Monitor.setSoft(!!CONFIG.policies.softMode);
   }
 
   function loadRemoteConfig(manual) {
@@ -2315,6 +2474,33 @@
         if (manual) toast('Не удалось прочитать конфигурацию (нет связи)', '');
         return null;
       });
+  }
+
+  /* ---------- отпечаток опубликованных файлов (v6.0) ----------
+     Если файлы сайта на сервере кто-то изменил (в том числе после сборки),
+     опубликованный отпечаток перестанет совпадать — система это увидит. */
+  var publishedIntegrity = null;
+  function loadIntegrity(manual) {
+    if (location.protocol === 'file:' || !window.fetch) {
+      if (manual) toast('Отпечаток файлов доступен только при раздаче по http', '');
+      return Promise.resolve(null);
+    }
+    return fetch(CONFIG.integrityUrl + '?ts=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        publishedIntegrity = d;
+        adminBuildRender();
+        if (manual) {
+          toast(d ? ('Отпечаток файлов: ' + (integrityMatches() ? 'совпадает' : 'НЕ СОВПАДАЕТ — файлы меняли'))
+            : 'Файл отпечатка не найден', d ? (integrityMatches() ? 'good' : 'bad') : '');
+        }
+        return d;
+      })
+      .catch(function () { return null; });
+  }
+  function integrityMatches() {
+    if (!publishedIntegrity || !publishedIntegrity.fingerprint) return true;
+    return publishedIntegrity.fingerprint === codeFingerprint();
   }
 
   function loadBuildStatus(manual) {
@@ -2385,10 +2571,20 @@
     /* строка роли: кто сейчас за пультом */
     if (els.adminRoles) {
       var who = ST.role ? (ROLES[ST.role] ? ROLES[ST.role].title : ST.role) : 'не определена';
-      var weak = codeIsWeak('curator') ? ' · <span class="warn-text">код куратора сохранён как простой sha256 — усилите через node tools/passgen.js</span>' : '';
+      var weak = codeIsWeak('curator')
+        ? ' · <span class="warn-text">код куратора в старом формате (sha256) — перевыпустите: node tools/passgen.js --emit --curator --code "КОД"</span>'
+        : '';
+      var noCur = !roleConfigured('curator')
+        ? ' · <span class="warn-text">код куратора не настроен на этом хостинге (нет js/auth.local.js)</span>'
+        : '';
+      var noAdm = !roleConfigured('admin')
+        ? ' · <span class="warn-text">код администратора не настроен на этом хостинге</span>'
+        : '';
       els.adminRoles.innerHTML = 'роль: <b>' + esc(who) + '</b>' +
-        (admin.authed ? ' · админка открыта' : '') + weak;
+        (admin.authed ? ' · админка открыта' : '') + weak + noCur + noAdm;
     }
+    adminPolicyRender();
+    adminThreatRender();
   }
   function adminToast(msg, cls) { toast(msg, cls || ''); }
 
@@ -2475,6 +2671,71 @@
     ];
     els.adminWatch.innerHTML = rows.map(function (r) {
       return '<div class="watch-row"><span>' + esc(r[0]) + '</span><b>' + esc(String(r[1])) + '</b></div>';
+    }).join('');
+  }
+
+  /* ---------- журнал угроз (v6.0) ----------
+     Попытки взлома и другие опасные события — отдельно от обычных действий. */
+  var THREATS = [];
+  function threat(kind, label, sev) {
+    var item = { t: Date.now(), kind: kind, label: label, sev: sev || 1 };
+    THREATS.unshift(item);
+    while (THREATS.length > 50) THREATS.pop();
+    if (window.Audit) Audit.log('threat.' + kind, label);
+    return item;
+  }
+
+  /* ---------- панель политик (v6.0) ---------- */
+  function adminPolicyRender() {
+    if (!els.adminPolicies) return;
+    var o = policyOverrides();
+    var row = function (k, label, type) {
+      var val = policyValue(k);
+      var local = Object.prototype.hasOwnProperty.call(o, k);
+      if (type === 'bool') {
+        return '<label class="chk"><input type="checkbox" id="pol_' + k + '"' + (val ? ' checked' : '') +
+          ' data-policy="' + k + '" /> ' + esc(label) + (local ? ' <span class="dim2">(локально)</span>' : '') + '</label>';
+      }
+      return '<label class="sel">' + esc(label) +
+        '<input type="number" id="pol_' + k + '" class="input" min="1" max="20" value="' + esc(val) +
+        ' data-policy="' + k + '" /></label>';
+    };
+    els.adminPolicies.innerHTML =
+      '<div class="pol-grid">' +
+      row('autoPause', 'авто-пауза при нарушении', 'bool') +
+      row('softMode', 'мягкий режим (без штрафов)', 'bool') +
+      row('autoReport', 'авто-отчёт в конце', 'bool') +
+      row('maxAttempts', 'лимит попыток входа', 'num') +
+      '</div>' +
+      '<div class="pol-note">Политику можно задать здесь (только на этом устройстве) или в config.json ' +
+      '(для всех). Значение из config.json: <b>' + esc(String(policyValue('reminder') || '—')) + '</b></div>';
+    var inputs = els.adminPolicies.querySelectorAll('[data-policy]');
+    for (var i = 0; i < inputs.length; i++) {
+      (function (el) {
+        on(el, 'change', function () {
+          var k = el.getAttribute('data-policy');
+          var v = (el.type === 'checkbox') ? el.checked : parseInt(el.value, 10);
+          if (typeof v !== 'number' || isNaN(v)) v = 5;
+          setPolicy(k, v);
+          if (window.Audit) Audit.log('policy.set', k + ' = ' + v);
+        });
+      })(inputs[i]);
+    }
+  }
+
+  /* ---------- журнал угроз (v6.0) ---------- */
+  function adminThreatRender() {
+    if (!els.adminThreats) return;
+    if (!THREATS.length) {
+      els.adminThreats.innerHTML = '<li class="hl-empty">попыток взлома не зафиксировано</li>';
+      return;
+    }
+    els.adminThreats.innerHTML = THREATS.slice(0, 30).map(function (it) {
+      var d = new Date(it.t);
+      function p(n) { return ('0' + n).slice(-2); }
+      return '<li class="hl-' + (it.sev >= 2 ? 'error' : 'warn') + '">' +
+        '<time>' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '</time>' +
+        '<b>' + esc(it.kind) + '</b> · ' + esc(it.label) + '</li>';
     }).join('');
   }
 
@@ -2652,6 +2913,11 @@
   if (els.btnAdminDump) on(els.btnAdminDump, 'click', adminDump);
   if (els.btnAdminRotate) on(els.btnAdminRotate, 'click', adminRotateCode);
   if (els.btnAdminResetCode) on(els.btnAdminResetCode, 'click', adminResetCode);
+  if (els.btnAdminPolicyReset) on(els.btnAdminPolicyReset, 'click', function () {
+    resetPolicies();
+    adminToast('Локальные переопределения политик сброшены', 'good');
+  });
+  if (els.btnAdminIntegrity) on(els.btnAdminIntegrity, 'click', function () { loadIntegrity(true); });
   if (els.btnAdminAuditClear) on(els.btnAdminAuditClear, 'click', function () {
     if (window.Audit) { Audit.clear(); adminAuditRender(); }
     adminToast('Журнал действий очищен', 'good');
@@ -2689,8 +2955,18 @@
     role: function () { return ST.role; },
     /* конфигурация, применённая из config.json */
     config: function () { return remoteCfg.raw; },
+    /* действующие политики (v6.0) */
+    policies: function () { return CONFIG.policies; },
+    /* журнал угроз (v6.0) */
+    threats: function () { return THREATS.slice(); },
+    /* настроены ли коды на этом хостинге */
+    authReady: function () { return { curator: roleReady('curator'), admin: roleReady('admin') }; },
     /* журнал действий */
     audit: function () { return window.Audit ? Audit.list() : []; },
+    /* отчёт о сессии (без выгрузки файла) */
+    report: function () { return buildReport(); },
+    /* отпечаток загруженного кода — для сверки с опубликованным */
+    integrityFile: function () { return publishedIntegrity; },
     /* обновление — только тех. администратору (раньше было доступно всем) */
     update: function (v) {
       if (!admin.authed) { toast('Нужен код тех. администратора', 'bad'); return false; }
@@ -2744,9 +3020,11 @@
   restoreState();
   updateWatermark();
   noteAppliedVersion(CONFIG.appVersion);
-  /* конфигурация и статус автоподдержки подтягиваются сами */
+  /* конфигурация, статус автоподдержки и отпечаток файлов подтягиваются сами */
   loadRemoteConfig(false);
   loadBuildStatus(false);
+  loadIntegrity(false);
+  applyPolicies();
   /* экземпляр поднялся — значит обновление уже применено: баннер закрываем,
      а метка версии приводится в соответствие с реально загруженным кодом */
   if (els.verBadge) els.verBadge.textContent = 'ВЕРСИЯ ' + CONFIG.appVersion;

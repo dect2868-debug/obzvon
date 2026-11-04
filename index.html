@@ -10,7 +10,7 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/styles.css?v=5.3" />
+  <link rel="stylesheet" href="css/styles.css?v=6.0" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -36,7 +36,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 5.3</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 6.0</div>
         </div>
       </div>
 
@@ -371,12 +371,25 @@
                     <input type="password" id="adminPass" class="input" placeholder="код доступа" autocomplete="off" />
                     <button type="button" class="btn btn-ghost" id="btnAdminAuth">Войти</button>
                   </div>
-                  <div class="auth-hint">код доступа на странице не показывается — только для тех. администратора</div>
+                  <div class="auth-hint">код доступа на странице не показывается — только для тех. администратора.<br>Горячие клавиши куратора: <b>Пробел</b> — пауза, <b>E</b> — завершить, <b>R</b> — отчёт, <b>A</b> — админка.</div>
                 </div>
               </div>
 
               <!-- содержимое админки -->
               <div id="adminBody" hidden>
+                <div class="admin-block">
+                  <div class="admin-block-title">ПОЛИТИКИ И ВМЕШАТЕЛЬСТВО</div>
+                  <div class="pol-box" id="adminPolicies">—</div>
+                  <div class="health-tools">
+                    <button type="button" class="btn btn-ghost" id="btnAdminPolicyReset" title="Вернуть значения из config.json">↺ Сбросить локальные</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminIntegrity" title="Сверить отпечаток файлов сайта">⟳ Проверить файлы</button>
+                  </div>
+                </div>
+
+                <div class="admin-block">
+                  <div class="admin-block-title">УГРОЗЫ</div>
+                  <ul class="health-log" id="adminThreats"></ul>
+                </div>
                 <div class="admin-block">
                   <div class="admin-block-title">ДОСТУП И РОЛИ</div>
                   <div class="admin-row" id="adminRoles">роль: не определена</div>
@@ -388,7 +401,7 @@
                   <div class="health-tools">
                     <button type="button" class="btn btn-ghost" id="btnAdminResetCode" title="Вернуть код, заданный в репозитории">↺ Код из репозитория</button>
                   </div>
-                  <div class="auth-hint">Новый код действует только в этом браузере (соль + PBKDF2). Чтобы он работал на всех устройствах — вставьте строки из поля выше в CONFIG (файл js/app.js).</div>
+                  <div class="auth-hint">Новый код действует только в этом браузере (соль + PBKDF2). Чтобы он работал на всех устройствах — внесите его в auth.local.json (файл вне репозитория) и пересоберите сайт.</div>
                 </div>
 
                 <div class="admin-block">
@@ -477,6 +490,21 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v6.0</div>
+                  <div class="news-body">
+                    <h3>Коды вне репозитория, политики вмешательства и контроль файлов</h3>
+                    <p>Коды доступа <b>больше не лежат в GitHub</b>: они живут в файле
+                       <code>js/auth.local.js</code> (в .gitignore), который собирается на
+                       сервере или в CI из секретов. Старый формат sha256 больше не
+                       принимается — такой хеш перебирают за секунды, теперь только
+                       PBKDF2. Секрет подписи состояния сессии стал свой на каждом
+                       устройстве. Появились <b>политики вмешательства</b>
+                       (авто-пауза, мягкий режим, авто-отчёт, лимит попыток),
+                       <b>журнал угроз</b>, <b>проверка отпечатка файлов</b> на сервере,
+                       <b>горячие клавиши куратора</b> и контрольная сумма отчёта.</p>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v5.3</div>
                   <div class="news-body">
                     <h3>авто-обновление: проверки пройдены</h3>
@@ -839,14 +867,18 @@
   <div class="wm-layer" id="wmLayer" aria-hidden="true"></div>
   <div class="noise" aria-hidden="true"></div>
 
-  <script src="js/fx.js?v=5.3"></script>
-  <script src="js/monitor.js?v=5.3"></script>
-  <script src="js/nav.js?v=5.3"></script>
-  <script src="js/live.js?v=5.3"></script>
-  <script src="js/archive.js?v=5.3"></script>
-  <script src="js/audit.js?v=5.3"></script>
-  <script src="js/health.js?v=5.3"></script>
-  <script src="js/app.js?v=5.3"></script>
+  <!-- ФАЙЛ С КОДАМИ ДОСТУПА. В РЕПОЗИТОРИИ ЕГО НЕТ (.gitignore):
+       он собирается на сервере или в CI из секретов. Если файла нет —
+       вход в пульт и в админку невозможен (это так и задумано). -->
+  <script src="js/auth.local.js?v=6.0"></script>
+  <script src="js/fx.js?v=6.0"></script>
+  <script src="js/monitor.js?v=6.0"></script>
+  <script src="js/nav.js?v=6.0"></script>
+  <script src="js/live.js?v=6.0"></script>
+  <script src="js/archive.js?v=6.0"></script>
+  <script src="js/audit.js?v=6.0"></script>
+  <script src="js/health.js?v=6.0"></script>
+  <script src="js/app.js?v=6.0"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

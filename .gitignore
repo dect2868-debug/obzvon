@@ -13,6 +13,13 @@ password*
 # ...но инструмент генерации кодов нужен в репозитории (это не секрет)
 !tools/passgen.js
 !docs/
+# v6.0: КОДЫ ДОСТУПА ЖИВУТ ВНЕ РЕПОЗИТОРИЯ
+# auth.local.json — источник правды (локальный файл, в git не попадает)
+# js/auth.local.js — то, что отдаётся браузеру (генерируется из auth.local.json)
+auth.local.json
+js/auth.local.js
+auth.local.*.json
+!js/audit.js
 
 # ключи, сертификаты, токены, env
 *.key

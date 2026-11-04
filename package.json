@@ -18,6 +18,8 @@
     "bump": "node tools/bump.js",
     "bump:patch": "node tools/bump.js --bump patch",
     "passgen": "node tools/passgen.js",
+    "inject:auth": "node tools/inject-auth.js",
+    "integrity": "node tools/integrity.js",
     "status": "node tools/status.js"
   },
   "devDependencies": {

@@ -1,0 +1,17 @@
+{
+  "app": "obzvon-integrity",
+  "v": "6.0",
+  "at": "2026-11-04T02:51:27.796Z",
+  "fingerprint": "35d113fb47245046d1adfcf0cde7e243e23df991cf8b6346d06bf9190955c8c2",
+  "files": {
+    "js/fx.js": "c11d65370217cf6a",
+    "js/monitor.js": "a42abb3a9bbe0946",
+    "js/nav.js": "24772ce9bd93821a",
+    "js/live.js": "35e00acd56a76415",
+    "js/archive.js": "961784098a283888",
+    "js/audit.js": "05e8fe2c8907c71f",
+    "js/health.js": "623c4be9bed1b727",
+    "js/app.js": "aaa790201424fff3",
+    "css/styles.css": "0807511a7d1cc627"
+  }
+}

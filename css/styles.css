@@ -1066,6 +1066,17 @@ th.sorted{animation:thPulse .3s ease}
   background:none!important;text-align:center}
 .warn-text{color:var(--warn)}
 
+/* ---- v6.0: политики вмешательства ---- */
+.pol-box{display:flex;flex-direction:column;gap:10px}
+.pol-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.pol-grid .chk,.pol-grid .sel{display:flex;align-items:center;gap:8px;font-family:var(--mono);
+  font-size:11.5px;color:var(--txt);padding:8px 10px;border-radius:10px;
+  background:rgba(255,255,255,.025);border-left:3px solid var(--acc)}
+.pol-grid .sel{justify-content:space-between}
+.pol-grid .input{width:74px;text-align:right}
+.pol-note{font-family:var(--mono);font-size:10.5px;color:var(--dim);line-height:1.6}
+.pol-note b{color:var(--txt)}
+
 #healthScore.good{color:var(--ok)}
 #healthScore.warn{color:var(--warn)}
 #healthScore.bad{color:var(--red)}
