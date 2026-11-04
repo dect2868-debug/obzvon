@@ -1447,3 +1447,97 @@ h1 span{background:linear-gradient(90deg,var(--txt),#9fb6d6)!important;
   .live-badge.on,.badge-run,.nav-link.active i,.gate-icon,.logo{animation:none!important}
   .metric.flash{animation:none!important}
 }
+
+/* ============================================================
+   ОБЗВОН v4.8 · МЯГКАЯ АНИМАЦИЯ
+   Правило: движение должно быть медленным, низкоамплитудным и
+   появляться по действию (наведение, смена значения), а не
+   постоянно. Никаких быстрых миганий, глитчей и вращающихся
+   рамок — иначе интерфейс «рябит» в глазах.
+   ============================================================ */
+
+/* ---------- фон: одно медленное «дыхание» вместо каши ---------- */
+.bg-fx::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(900px 520px at 28% 12%,rgba(76,201,224,.10) 0%,transparent 62%),
+             radial-gradient(760px 480px at 82% 84%,rgba(140,120,220,.09) 0%,transparent 60%);
+  opacity:.55;animation:calmBreath 28s ease-in-out infinite alternate}
+@keyframes calmBreath{
+  0%{transform:scale(1) translate3d(0,0,0);opacity:.42}
+  100%{transform:scale(1.08) translate3d(-1.5%,1.5%,0);opacity:.62}}
+
+/* ---------- панели: мягкое появление, без «прыжков» ---------- */
+.view > section{animation:riseCalm .6s cubic-bezier(.22,.7,.3,1) backwards}
+.view > section:nth-child(2){animation-delay:.06s}
+.view > section:nth-child(n+3){animation-delay:.12s}
+@keyframes riseCalm{from{opacity:0;transform:translateY(10px)}}
+.panel{transition:border-color .35s ease,box-shadow .35s ease,background .35s ease}
+.panel:hover{border-color:rgba(120,150,190,.2)!important}
+
+/* ---------- карточки метрик: подъём и мягкая подсветка ---------- */
+.metric{transition:transform .22s ease,border-color .25s ease,background .3s ease}
+.metric:hover{transform:translateY(-2px)!important;border-color:rgba(120,150,190,.24)!important;
+  background:linear-gradient(180deg,rgba(24,32,47,.8),rgba(14,19,30,.86))!important}
+.metric b{transition:color .3s ease}
+.metric.flash{animation:metricflashCalm .6s ease!important}
+@keyframes metricflashCalm{
+  0%{background:rgba(240,97,111,.13)}
+  100%{background:linear-gradient(180deg,rgba(21,28,42,.72),rgba(13,18,28,.82))}}
+
+/* ---------- кнопки: лёгкий подъём и мягкий ореол ---------- */
+.btn{transition:transform .18s ease,background .22s ease,border-color .22s ease,box-shadow .22s ease}
+.btn:not(:disabled):hover{transform:translateY(-1px)!important;
+  box-shadow:0 4px 16px rgba(0,0,0,.28),0 0 0 1px rgba(76,201,224,.12)!important}
+.btn:not(:disabled):active{transform:translateY(0)!important}
+
+/* ---------- меню: плавный индикатор активного пункта ---------- */
+.nav-link{transition:background .25s ease,color .25s ease,border-color .25s ease}
+.nav-link.active::before{transition:top .3s ease,height .3s ease,opacity .3s ease;opacity:1!important}
+
+/* ---------- индикаторы: спокойное дыхание ---------- */
+.live-dot{animation:calmBlink 2.8s ease-in-out infinite!important}
+@keyframes calmBlink{0%,100%{opacity:.45}50%{opacity:.95}}
+.live-badge{animation:calmBlink 3.2s ease-in-out infinite!important}
+.gate-icon{animation:calmBlink 4s ease-in-out infinite!important}
+.badge-run{animation:calmBlink 2.6s ease-in-out infinite!important}
+
+/* ---------- строки таблиц: спокойное выделение ---------- */
+.stat-table tr,.ch-table tbody tr{transition:background .2s ease}
+.stat-table tr:hover td,.ch-table tbody tr:hover td{background:rgba(76,201,224,.05)!important}
+
+/* ---------- фишки: мягкий блеск только при наведении ---------- */
+.chip{transition:transform .2s ease,border-color .25s ease,background .25s ease}
+.chip:hover{transform:translateY(-1px)!important;border-color:rgba(120,150,190,.32)!important}
+.chip::after{display:none!important}
+
+/* ---------- графики: тонкая рамка сверху у блоков с графиком ---------- */
+.live-panel,.arch-chart-wrap{position:relative;overflow:hidden}
+.live-panel::before,.arch-chart-wrap::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(76,201,224,.35),transparent);pointer-events:none}
+
+/* ---------- лента событий: мягкая подсветка новой строки ---------- */
+.feed-list li{animation:feedCalm .7s ease-out}
+@keyframes feedCalm{
+  0%{background:rgba(76,201,224,.1)}
+  100%{background:rgba(255,255,255,.025)}}
+.feed-list li.sev-1{animation-name:feedCalmWarn}
+.feed-list li.sev-2{animation-name:feedCalmBad}
+@keyframes feedCalmWarn{0%{background:rgba(232,180,90,.12)}100%{background:rgba(232,180,90,.05)}}
+@keyframes feedCalmBad{0%{background:rgba(240,97,111,.14)}100%{background:rgba(240,97,111,.06)}}
+
+/* ---------- тосты и баннер ---------- */
+.toast{animation:toastCalm .3s ease!important}
+@keyframes toastCalm{from{opacity:0;transform:translate(-50%,10px)}}
+.upd-banner{animation:updCalm .4s cubic-bezier(.22,.8,.3,1)!important}
+@keyframes updCalm{from{opacity:0;transform:translate(-50%,-10px)}}
+.upd-icon{animation:calmSpin 9s linear infinite!important}
+@keyframes calmSpin{to{transform:rotate(360deg)}}
+
+/* ---------- новости: мягкое выделение ---------- */
+.news-item{transition:background .3s ease,border-color .3s ease}
+.news-item:hover{transform:none!important;background:rgba(255,255,255,.03)!important}
+
+/* ---------- меньше движения: всё это выключается ---------- */
+@media (prefers-reduced-motion:reduce){
+  .bg-fx::after{animation:none!important}
+  .metric:hover,.btn:not(:disabled):hover,.chip:hover{transform:none!important}
+}

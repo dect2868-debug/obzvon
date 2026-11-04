@@ -23,6 +23,7 @@
   var lastEvent = '';
   var stats = { max: 0, min: 100, sum: 0, n: 0, peakCheat: 0 };
   var ro = null;
+  var animTimer = null;     /* плавная перерисовка во время сессии (v4.8) */
 
   function el(id) { return document.getElementById(id); }
 
@@ -158,6 +159,10 @@
     if (!t0) t0 = Date.now();
     clearInterval(timer);
     timer = setInterval(function () { sample(last.c, last.x); }, 1000);
+    /* мягкая перерисовка 20 раз в секунду: «живая точка» на конце линии
+       и ореол дышат плавно, без рывков (v4.8) */
+    clearInterval(animTimer);
+    animTimer = setInterval(draw, 50);
     setLive(true);
   }
 
@@ -165,6 +170,8 @@
     running = false;
     clearInterval(timer);
     timer = null;
+    clearInterval(animTimer);
+    animTimer = null;
     setLive(false);
     updateSummary();
     draw();

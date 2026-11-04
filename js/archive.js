@@ -152,6 +152,19 @@
     }).join('');
   }
 
+  /* плавный рост столбцов (v4.8): короткая ease-out анимация, без прыжков */
+  var chartProgress = 1;
+  function animateChart() {
+    var t0 = Date.now();
+    function step() {
+      var e = Math.min(1, (Date.now() - t0) / 420);
+      chartProgress = 1 - Math.pow(1 - e, 3);
+      renderChart();
+      if (e < 1) window.requestAnimationFrame(step);
+    }
+    window.requestAnimationFrame(step);
+  }
+
   function renderChart() {
     var cv = el('archChart');
     if (!cv || !cv.getContext) return;
@@ -196,7 +209,7 @@
     var bw = Math.max(3, Math.min(28, step - 6));
     rows.forEach(function (r, i) {
       var x = padL + 3 + i * step + (step - bw) / 2;
-      var bh = (r.conc / 100) * gh;
+      var bh = (r.conc / 100) * gh * chartProgress;
       var col = r.verdict === 'ЗАЧЁТ' ? '#5bff9d' : (r.verdict === 'СОМНИТЕЛЬНО' ? '#ffb84d' : '#ff4d6d');
       var g = ctx.createLinearGradient(0, padT + gh - bh, 0, padT + gh);
       g.addColorStop(0, col);
@@ -207,7 +220,7 @@
       ctx.globalAlpha = 1;
       /* читомеряк — тонкая полоска снизу */
       if (r.cheat > 0) {
-        var ch = (r.cheat / 100) * gh;
+        var ch = (r.cheat / 100) * gh * chartProgress;
         ctx.fillStyle = 'rgba(255,77,109,.55)';
         ctx.fillRect(x, padT + gh - ch, bw, Math.min(2.5, ch));
       }
@@ -320,6 +333,7 @@
     renderChart();
     renderTable();
     renderCompare();
+    animateChart();
   }
 
   /* ---------- экспорт CSV ---------- */
