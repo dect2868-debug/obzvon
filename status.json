@@ -1,11 +1,11 @@
 {
   "app": "obzvon-status",
-  "v": "7.2",
-  "at": "2026-11-05T06:24:35.858Z",
+  "v": "7.3",
+  "at": "2026-11-06T01:54:54.220Z",
   "result": "ok",
-  "commit": "515ba2b545f3330690bbed3294d5ab1aa986dadb",
+  "commit": "0775847b049696e9ebab986233ab878fcec0fc91",
   "branch": "main",
-  "notes": "прогон 14",
-  "run": "41980120189",
-  "url": "https://github.com/dect2868-debug/obzvon/actions/runs/41980120189"
+  "notes": "прогон 15",
+  "run": "42146844936",
+  "url": "https://github.com/dect2868-debug/obzvon/actions/runs/42146844936"
 }
