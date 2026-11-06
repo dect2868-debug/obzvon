@@ -39,7 +39,10 @@ s.test('однофайловая версия самодостаточна: не
   eq((html.match(/<link rel="stylesheet"/g) || []).length, 0, 'остались внешние стили');
   assert(!html.includes('assets/logo.svg'), 'логотип не встроен');
   /* никаких внешних адресов, кроме xmlns внутри data: */
-  const urls = (html.match(/https?:\/\/[^\s"')]+/g) || []).filter((u) => u.indexOf('www.w3.org') < 0);
+  /* www.w3.org и schemas.openxmlformats.org — это пространства имён XML
+     (идентификаторы, их никто не скачивает), они разрешены */
+  const urls = (html.match(/https?:\/\/[^\s"')]+/g) || [])
+    .filter((u) => u.indexOf('www.w3.org') < 0 && u.indexOf('schemas.openxmlformats.org') < 0);
   eq(urls.length, 0, 'внешние адреса: ' + urls.slice(0, 3).join(', '));
 });
 

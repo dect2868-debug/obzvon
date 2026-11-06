@@ -22,6 +22,7 @@
     "integrity": "node tools/integrity.js",
     "status": "node tools/status.js",
     "audit": "node tests/audit.js",
+    "excel": "node tools/excel-export.js",
     "offline": "node tools/offline-check.js"
   },
   "devDependencies": {

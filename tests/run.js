@@ -13,6 +13,7 @@ const suites = [
   require('./stats'),
   require('./v7'),
   require('./v71'),
+  require('./v72'),
   require('./audit'),
   require('./load'),
   require('./build')

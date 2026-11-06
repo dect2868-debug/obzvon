@@ -66,3 +66,6 @@ coverage/
 # ---- сборка для своего хостинга (npm run build) ----
 dist/
 obzvon-site.zip
+
+obzvon-excel-*.xlsx
+*.xlsx

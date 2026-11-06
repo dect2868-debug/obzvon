@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.1 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.2 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.1',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.2',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -326,7 +326,7 @@
     'adminStats','btnAdminStats','adminAlarm','adminAlarms','adminProfiles','selDemoKind','btnAdminDemo',
     'adminOffline','btnAdminOffline','btnAdminActPause','btnAdminActResume','btnAdminActEnd',
     'btnAdminActUnlock','feedFilter',
-    'btnAdminProfiles','btnAdminHtml','btnAdminExportAll','selMode','selDensity',
+    'btnAdminProfiles','btnAdminHtml','btnAdminExportAll','btnAdminExcel','selMode','selDensity',
     'chkBigButtons','selVolume','btnAdminApplyUi']
    .forEach(function (id) { els[id] = $(id); });
 
@@ -1847,6 +1847,124 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     if (window.Audit) Audit.log('export.all', 'выгрузка всех данных');
     toast('Все данные выгружены в JSON', 'good');
+  }
+
+  /* ---------- выгрузка в Excel (v7.2) ----------
+     Настоящий файл .xlsx (открывается в Excel/LibreOffice/Таблицах):
+     лист «Обзвоны» — все сессии, «Профили» — участники с оценкой доверия,
+     «Статистика» — счётчики посещений, «Конфигурация» — действующие
+     настройки, «Тревоги» — журнал надзора. Собирается прямо в браузере,
+     наружу ничего не уходит. */
+  function fmtCellDate(ts) {
+    var d = new Date(Number(ts) || 0);
+    if (isNaN(d.getTime())) return '';
+    var p = function (x) { return (x < 10 ? '0' : '') + x; };
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() +
+      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function exportExcel() {
+    if (!window.Excel) { toast('Модуль Excel не загружен', 'bad'); return false; }
+    var sheets = [];
+
+    /* --- лист 1: обзвоны --- */
+    var items = (window.Archive && Archive.list) ? Archive.list() : [];
+    var rows1 = [['№', 'начало', 'завершение', 'длительность (сек)', 'вердикт',
+      'концентрация %', 'читомеряк %', 'фокус %', 'реакция (мс)',
+      'испытаний', 'верных', 'нарушений', 'отметки', 'устройство']];
+    items.forEach(function (r, i) {
+      rows1.push([i + 1, fmtCellDate(r.startedAt), fmtCellDate(r.endedAt),
+        Number(r.duration) || 0, String(r.verdict || '—'),
+        Number(r.conc) || 0, Number(r.cheat) || 0, Number(r.focus) || 0,
+        (r.reaction === null || r.reaction === undefined) ? '—' : Number(r.reaction),
+        Number(r.challenges) || 0, Number(r.ok) || 0, Number(r.viol) || 0,
+        (r.chips || []).join(', '), String(r.device || '')]);
+    });
+    if (items.length > 1) {
+      /* итоговая строка: средние значения */
+      var sum = function (k) {
+        var s = 0; items.forEach(function (r) { s += Number(r[k]) || 0; }); return s;
+      };
+      rows1.push(['ИТОГО', '', '', sum('duration'), '',
+        Math.round(sum('conc') / items.length), Math.round(sum('cheat') / items.length),
+        Math.round(sum('focus') / items.length), '', sum('challenges'), sum('ok'), sum('viol'), '', '']);
+    }
+    sheets.push({ name: 'Обзвоны', rows: rows1 });
+
+    /* --- лист 2: профили участников --- */
+    var profs = (window.Profiles && Profiles.list) ? Profiles.list() : [];
+    var rows2 = [['ID устройства', 'первый раз', 'последний раз', 'обзвонов',
+      'средняя концентрация %', 'реакция (мс)', 'нарушений', 'доверие', 'оценка']];
+    profs.forEach(function (p) {
+      rows2.push([String(p.id || ''), fmtCellDate(p.firstAt), fmtCellDate(p.lastAt),
+        Number(p.calls) || 0, Number(p.conc) || 0,
+        (p.reaction === null || p.reaction === undefined) ? '—' : Number(p.reaction),
+        Number(p.viol) || 0, Number(p.trust) || 0, String(p.trustLabel || '')]);
+    });
+    sheets.push({ name: 'Профили', rows: rows2 });
+
+    /* --- лист 3: статистика в цифрах --- */
+    var st = (window.Stats && Stats.snapshot) ? Stats.snapshot() : null;
+    var rows3 = [['показатель', 'значение', 'комментарий']];
+    if (st && st.counters) {
+      rows3.push(['заходов на сайт', st.counters.visits, 'в этом браузере']);
+      rows3.push(['калибровок начато', st.counters.calibrations, '']);
+      rows3.push(['калибровок пройдено', st.counters.calibPassed, '']);
+      rows3.push(['обзвонов начато', st.counters.sessions, '']);
+      rows3.push(['обзвонов завершено', st.counters.finished, '']);
+      rows3.push(['разных участников', st.people, 'анонимные id устройств']);
+      rows3.push(['первый заход', fmtCellDate(st.counters.firstVisit), '']);
+      rows3.push(['последний заход', fmtCellDate(st.counters.lastVisit), '']);
+      rows3.push(['сборщик статистики', st.collector || 'выключен',
+        st.collector ? 'сводка по всем устройствам' : 'данные только в этом браузере']);
+    }
+    var tot = loadTotals();
+    rows3.push(['всего обзвонов (итоги)', Number(tot.sessions) || 0, '']);
+    rows3.push(['средний балл', Number(tot.avg) || 0, '']);
+    rows3.push(['предыдущий средний',
+      (tot.prevAvg === undefined || tot.prevAvg === null) ? '—' : Number(tot.prevAvg), '']);
+    sheets.push({ name: 'Статистика', rows: rows3 });
+
+    /* --- лист 4: конфигурация --- */
+    var cfg = remoteCfg.raw || {};
+    var rows4 = [['раздел', 'параметр', 'значение']];
+    function flatCfg(prefix, obj) {
+      Object.keys(obj || {}).forEach(function (k) {
+        var v = obj[k];
+        var key = prefix ? prefix + '.' + k : k;
+        if (v && typeof v === 'object' && !Array.isArray(v)) flatCfg(key, v);
+        else if (Array.isArray(v)) rows4.push([prefix || 'корень', k, v.length ? v.join(', ') : 'пусто']);
+        else if (typeof v !== 'string' || v.length < 200) rows4.push([prefix || 'корень', key, v === '' ? 'пусто' : String(v)]);
+        else rows4.push([prefix || 'корень', key, String(v).slice(0, 197) + '…']);
+      });
+    }
+    flatCfg('', cfg);
+    rows4.push(['система', 'версия', String(CONFIG.appVersion)]);
+    rows4.push(['система', 'режим', String(CONFIG.mode)]);
+    rows4.push(['система', 'порог зачёта', String(CONFIG.threshold)]);
+    if (buildStatus) {
+      rows4.push(['автоподдержка', 'статус', String(buildStatus.status || '')]);
+      rows4.push(['автоподдержка', 'последняя сборка', fmtCellDate(buildStatus.at)]);
+    }
+    sheets.push({ name: 'Конфигурация', rows: rows4 });
+
+    /* --- лист 5: тревоги и угрозы --- */
+    var rows5 = [['когда', 'тип', 'описание']];
+    ALARMS.slice(0, 50).forEach(function (a) {
+      rows5.push([fmtCellDate(a.at), 'тревога', String(a.text || a.kind || '')]);
+    });
+    THREATS.slice(0, 50).forEach(function (t2) {
+      rows5.push([fmtCellDate(t2.at), 'нарушение', String(t2.text || t2.kind || '')]);
+    });
+    sheets.push({ name: 'Тревоги', rows: rows5 });
+
+    var name = 'obzvon-excel-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+    var ok = Excel.download(sheets, name);
+    if (ok) {
+      if (window.Audit) Audit.log('export.excel', 'выгрузка Excel (' + sheets.length + ' листов)');
+      toast('Excel-файл сохранён: ' + sheets.length + ' листов', 'good');
+    } else toast('Не удалось сохранить файл', 'bad');
+    return ok;
   }
 
   /* ---------- экспорт / импорт статистики (v3.8) ---------- */
@@ -3414,6 +3532,7 @@
   });
   if (els.btnAdminHtml) on(els.btnAdminHtml, 'click', downloadHtmlReport);
   if (els.btnAdminExportAll) on(els.btnAdminExportAll, 'click', exportEverything);
+  if (els.btnAdminExcel) on(els.btnAdminExcel, 'click', exportExcel);
   if (els.btnAdminApplyUi) on(els.btnAdminApplyUi, 'click', function () {
     if (els.selDensity) CONFIG.ui.density = els.selDensity.value;
     if (els.chkBigButtons) CONFIG.ui.bigButtons = !!els.chkBigButtons.checked;
@@ -3467,6 +3586,7 @@
     /* действующие политики (v6.0) */
     policies: function () { return CONFIG.policies; },
     /* журнал угроз (v6.0) */
+    exportExcel: exportExcel,
     threats: function () { return THREATS.slice(); },
     /* статистика посещений и обзвонов (v6.1) */
     stats: function () { return window.Stats ? Stats.snapshot() : null; },

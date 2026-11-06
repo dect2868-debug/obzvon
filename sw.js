@@ -33,6 +33,7 @@ var SHELL = [
   './js/stats.js',
   './js/profiles.js',
   './js/health.js',
+  './js/excel.js',
   './js/app.js',
   './js/auth.local.js',
   './version.json',
