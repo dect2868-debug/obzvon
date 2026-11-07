@@ -12,7 +12,7 @@
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#0b0f17" />
-  <link rel="stylesheet" href="css/styles.css?v=7.8" />
+  <link rel="stylesheet" href="css/styles.css?v=7.9" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -38,7 +38,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.8</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.9</div>
         </div>
       </div>
 
@@ -154,9 +154,10 @@
             <div class="gate-card">
               <div class="gate-icon">◎</div>
               <h2>ОБЗВОН НЕ ЗАПУЩЕН</h2>
-              <p id="gateText">Дождитесь команды куратора и нажмите «Начать обзвон» — обзвон доступен сразу, калибровка необязательна. Если хотите заранее настроить темп, её можно пройти отдельно. С телефона тоже можно: на экране появятся кнопки для ответа.</p>
-              <button type="button" class="btn btn-ghost" id="btnCalibrate">◎ Калибровка (необязательно)</button>
-              <div class="gate-status" id="calibStatus"></div>
+              <p id="gateText">Обзвон можно начать прямо сейчас — самому, без кода куратора: нажмите «Начать обзвон». С телефона тоже можно: на экране появятся кнопки для ответа.</p>
+              <button type="button" class="btn btn-go" id="btnGateStart">▶ Начать обзвон</button>
+              <button type="button" class="btn btn-ghost" id="btnCalibrate" hidden>◎ Калибровка (необязательно)</button>
+              <div class="gate-status" id="calibStatus" hidden></div>
             </div>
           </section>
 
@@ -222,7 +223,7 @@
                     <option value="warmup">Тренировка</option>
                   </select>
                 </label>
-                <label class="sel">калибровка:
+                <label class="sel" hidden>калибровка:
                   <select id="selCalib">
                     <option value="6">6 (обычно)</option>
                     <option value="10">10 (тяжело)</option>
@@ -572,6 +573,19 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v7.9</div>
+                  <div class="news-body">
+                    <h3>Обзвон сразу: самостоятельный старт, калибровка убрана из интерфейса</h3>
+                    <p>Участник сам нажимает «Начать обзвон» — без кода куратора
+                       и без калибровки. Кнопка калибровки и её настройка скрыты
+                       (механика сохранена для внутренней настройки темпа).</p>
+                    <p>Обновление поднято автоматически: проверки проекта пройдены,
+                       версия разнесена по всем файлам. Подробности — в журнале
+                       изменений репозитория.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v7.8</div>
                   <div class="news-body">
                     <h3>авто-обновление: проверки пройдены</h3>
@@ -1017,10 +1031,10 @@
               <div class="help-grid">
                 <div class="help-card">
                   <h3>◎ Как проходит обзвон</h3>
-                  <p>Куратор входит в «Пульт», вводит код и запускает обзвон —
-                     сразу, без калибровки: она больше не обязательна и осталась
-                     только для настройки темпа (её можно пройти отдельно по
-                     кнопке в гейте). Во время сеанса испытания внимания
+                  <p>Участник сам нажимает «Начать обзвон» в гейте —
+                     сразу, без кода куратора и без калибровки. Куратор может
+                     присоединиться через «Пульт», чтобы видеть метрики и
+                     управлять сеансом. Во время сеанса испытания внимания
                      появляются каждые 10–25 секунд. По завершении
                      система показывает итог с фишками и отчётом.</p>
                 </div>
@@ -1151,18 +1165,18 @@
   <!-- ФАЙЛ С КОДАМИ ДОСТУПА. В РЕПОЗИТОРИИ ЕГО НЕТ (.gitignore):
        он собирается на сервере или в CI из секретов. Если файла нет —
        вход в пульт и в админку невозможен (это так и задумано). -->
-  <script src="js/auth.local.js?v=7.8"></script>
-  <script src="js/fx.js?v=7.8"></script>
-  <script src="js/monitor.js?v=7.8"></script>
-  <script src="js/nav.js?v=7.8"></script>
-  <script src="js/live.js?v=7.8"></script>
-  <script src="js/archive.js?v=7.8"></script>
-  <script src="js/audit.js?v=7.8"></script>
-  <script src="js/stats.js?v=7.8"></script>
-  <script src="js/profiles.js?v=7.8"></script>
-  <script src="js/health.js?v=7.8"></script>
-  <script src="js/excel.js?v=7.8"></script>
-  <script src="js/app.js?v=7.8"></script>
+  <script src="js/auth.local.js?v=7.9"></script>
+  <script src="js/fx.js?v=7.9"></script>
+  <script src="js/monitor.js?v=7.9"></script>
+  <script src="js/nav.js?v=7.9"></script>
+  <script src="js/live.js?v=7.9"></script>
+  <script src="js/archive.js?v=7.9"></script>
+  <script src="js/audit.js?v=7.9"></script>
+  <script src="js/stats.js?v=7.9"></script>
+  <script src="js/profiles.js?v=7.9"></script>
+  <script src="js/health.js?v=7.9"></script>
+  <script src="js/excel.js?v=7.9"></script>
+  <script src="js/app.js?v=7.9"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.8 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.9 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.8',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.9',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -306,7 +306,7 @@
    'btnReport','btnReset','chkFsReq','selThreshold','metrics','concValue','concBar','cheatValue',
    'cheatBar','focusState','tabState','screenCount','avgReaction','focusLosses','idleHits','violCount',
    'devKind','devOs','devBrowser','devInput','devScreen','devViewport','devLang','devNet','devHw','devUa',
-   'gate','gateText','btnCalibrate','calibStatus','playfield','chRound','chBar','chTask','arena','chTarget',
+   'gate','gateText','btnGateStart','btnCalibrate','calibStatus','playfield','chRound','chBar','chTask','arena','chTarget',
    'signalList','feedCount','pauseOverlay','btnResume','lockOverlay','lockTitle','lockText','unlockInput',
    'btnUnlock','sumOverlay','sumTag','sumVerdict','sumTable','btnSumReport','btnSumClose','toast','stroopRow',
    'totalConc','concTrend','errBanner','selCalib','statTable','chTable','chTableBody','chStat','partPanel','chPad',
@@ -969,9 +969,9 @@
           if (window.Stats) Stats.count('calib.pass');
           ST.state = 'idle';
           Monitor.setRunning(false);
-          els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — можно начинать обзвон</span>';
-          els.gateText.textContent = 'Калибровка пройдена. Дождитесь команды куратора и нажмите «Начать обзвон».';
-          if (ST.authed) els.btnStart.disabled = false;
+          els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — темп настроен</span>';
+          els.gateText.textContent = 'Калибровка пройдена — темп настроен. Нажмите «Начать обзвон».';
+          els.btnStart.disabled = !ST.authed;
           toast('Калибровка пройдена', 'good');
           setTimeout(function () { if (ST.state === 'idle') els.playfield.hidden = true; }, 1200);
         } else {
@@ -1155,8 +1155,7 @@
 
   function startSession() {
     if (ST.state !== 'idle') { toast('Сейчас это недоступно', 'bad'); return; }
-    if (!ST.authed) { toast('Сначала войдите в пульт куратора', 'bad'); return; }
-    if (!ST.calibrated) { toast('Сначала пройдите калибровку', 'bad'); return; }
+    /* v7.9: старт доступен каждому участнику — без кода куратора и без калибровки */
     ST.state = 'running';
     ST.startedAt = 0; ST.runSince = Date.now();
     ST.sessionStartAt = Date.now();
@@ -1375,7 +1374,7 @@
     els.gate.hidden = false; els.playfield.hidden = true;
     els.partPanel.hidden = true;
     els.pauseOverlay.hidden = true; els.lockOverlay.hidden = true; els.sumOverlay.hidden = true;
-    els.btnStart.disabled = !(ST.authed && ST.calibrated);
+    els.btnStart.disabled = !ST.authed;
     els.btnPause.disabled = true; els.btnEnd.disabled = true; els.btnResume.disabled = true;
     FEED = [];
     els.signalList.innerHTML = '<li class="feed-empty">событий нет</li>';
@@ -2115,7 +2114,7 @@
     els.authRow.hidden = true;
     els.ctrlRow.hidden = false;
     els.authHint.hidden = true;
-    if (ST.calibrated) els.btnStart.disabled = false;
+    els.btnStart.disabled = false;
   }
   function doAuth(role) {
     role = role || 'curator';
@@ -2149,6 +2148,7 @@
   }
 
   on(els.btnStart, 'click', startSession);
+  on(els.btnGateStart, 'click', startSession);   /* самостоятельный старт участника (v7.9) */
 
   /* ---------- горячие клавиши куратора (v6.0) ----------
      Пробел — пауза/продолжить, E — завершить, R — отчёт, A — админка.
@@ -2196,8 +2196,8 @@
         ST.calibTried = true;
         ST.calibDone = CONFIG.calibCount;
         ST.baseReaction = ST.baseReaction || 400;
-        els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — можно начинать обзвон</span>';
-        if (ST.authed) els.btnStart.disabled = false;
+        els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — темп настроен</span>';
+        els.btnStart.disabled = !ST.authed;
         toast('готово', 'good');
         saveState();
       }

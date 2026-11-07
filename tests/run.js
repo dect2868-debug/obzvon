@@ -16,6 +16,7 @@ const suites = [
   require('./v72'),
   require('./v75'),
   require('./v77'),
+  require('./v79'),
   require('./audit'),
   require('./load'),
   require('./build')
