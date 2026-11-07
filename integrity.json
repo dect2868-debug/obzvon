@@ -1,20 +1,20 @@
 {
   "app": "obzvon-integrity",
-  "v": "7.5",
-  "at": "2026-11-07T02:52:38.649Z",
+  "v": "7.6",
+  "at": "2026-11-07T04:05:17.425Z",
   "fingerprint": "7b2f2c0ef66fc8d6f44355afeec35b89677002107d377c9cd25075bcc35bab67",
   "files": {
-    "js/fx.js": "7e2d238645eef505",
-    "js/monitor.js": "1c5cb3d843ff8655",
-    "js/nav.js": "1f535db81de010d7",
-    "js/live.js": "768cabdde621d4ed",
-    "js/archive.js": "a76c6c58077a82d3",
-    "js/audit.js": "cf240ca3d14a7730",
+    "js/fx.js": "6f663df185bd3c3f",
+    "js/monitor.js": "c7bf11e133f9330b",
+    "js/nav.js": "8deb042bb5d3929d",
+    "js/live.js": "b5fd8260227462f6",
+    "js/archive.js": "f6ad595512dab1d4",
+    "js/audit.js": "50f205cc293cde9c",
     "js/stats.js": "a349d190ed58f91f",
     "js/profiles.js": "e469773a7322892e",
-    "js/health.js": "6e9519774112b1ed",
+    "js/health.js": "c32d5e3237d97a7d",
     "js/excel.js": "3dc88fc0b2aa7cac",
-    "js/app.js": "92c92e814c5cc008",
+    "js/app.js": "d4c907ee1e164c00",
     "css/styles.css": "cfb08c8e7085e2da"
   }
 }

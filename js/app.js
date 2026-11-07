@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.6 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.7 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.6',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.7',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -364,7 +364,10 @@
     state: 'idle',          // idle | calib | running | paused | locked | ended
     authed: false,
     role: null,            // кто за пультом: null | 'curator' | 'admin'
-    calibrated: false,
+    calibrated: true,       /* v7.7: калибровка больше не обязательна —
+                               обзвон доступен сразу после входа */
+    calibTried: false,      /* калибровка реально выполнялась в этой загрузке
+                               (для фишки «ЧИСТАЯ КАЛИБРОВКА» и статистики) */
     calibDone: 0,
     sessionId: null,
     sessionStartAt: 0,      // wall-clock момент начала сессии (для отображения «старт»)
@@ -1346,7 +1349,7 @@
       try {
         Profiles.onSession({
           conc: Monitor.concentration(), reaction: ar, viol: S.viol.length,
-          calibrated: !!ST.calibrated
+          calibrated: !!ST.calibTried
         });
       } catch (eP) {}
     }
@@ -1498,7 +1501,7 @@
     if (ar !== null && ar < 450 && seance >= 5) list.push(['🧊', 'ЛЁД', 'ср. реакция ' + ar + ' мс', 'cool']);
     if (conc >= 99 && seance >= 5) list.push(['💎', 'ИДЕАЛЬНЫЙ', conc + '% концентрация', 'gold']);
     else if (conc >= 90 && seance >= 5) list.push(['🥇', 'ЧЕМПИОН', conc + '% концентрация', 'cool']);
-    if (ST.calibFails === 0 && seance >= 1) list.push(['🛠', 'ЧИСТАЯ КАЛИБРОВКА', 'калибровка без ошибок', 'cool']);
+    if (ST.calibTried && ST.calibFails === 0 && seance >= 1) list.push(['🛠', 'ЧИСТАЯ КАЛИБРОВКА', 'калибровка без ошибок', 'cool']);
     if (ST.hadReload && seance >= 3) list.push(['🔁', 'ВОЗВРАЩЕНИЕ', 'дошёл после перезагрузки', '']);
     if ((tot.sessions || 0) >= 10) list.push(['🏅', 'ВЕТЕРАН', (tot.sessions || 0) + ' обзвон(ов)', 'gold']);
 
@@ -2190,6 +2193,7 @@
           return;
         }
         ST.calibrated = true;
+        ST.calibTried = true;
         ST.calibDone = CONFIG.calibCount;
         ST.baseReaction = ST.baseReaction || 400;
         els.calibStatus.innerHTML = '<span class="good">✓ КАЛИБРОВКА ПРОЙДЕНА — можно начинать обзвон</span>';
@@ -2227,9 +2231,9 @@
   bindSort(els.statTable, statSort, updateTables);
   bindSort(els.chTable, chSort, updateTables);
 
-  /* сложность калибровки: 6 / 10 / 20 / 50 / 100 заданий */
+  /* сложность калибровки: 6 / 10 / 20 / 50 / 100 заданий (необязательна, v7.7) */
   function syncCalibBtn() {
-    els.btnCalibrate.textContent = '◎ Калибровка (' + CONFIG.calibCount + ' испытаний)';
+    els.btnCalibrate.textContent = '◎ Калибровка (необязательно, ' + CONFIG.calibCount + ' испытаний)';
   }
   if (els.selCalib) { els.selCalib.value = String(CONFIG.calibCount); }
   on(els.selCalib, 'change', function () {
@@ -2300,6 +2304,7 @@
   on(els.btnCalibrate, 'click', function () {
     if (ST.state !== 'idle') { toast('Сейчас это недоступно', 'bad'); return; }
     ST.state = 'calib'; ST.calibDone = 0; ST.calibFails = 0; ST.calibTry = 0;
+    ST.calibTried = true;   /* калибровка реально запущена вручную */
     CH_LOG = [];           /* новая калибровка — чистый журнал */
     CH_SEQ = 0;            /* и нумерация журнала с нуля (было: продолжалась старая) */
     if (window.Stats) Stats.count('calib.start');

@@ -12,7 +12,7 @@
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#0b0f17" />
-  <link rel="stylesheet" href="css/styles.css?v=7.6" />
+  <link rel="stylesheet" href="css/styles.css?v=7.7" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -38,7 +38,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.6</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.7</div>
         </div>
       </div>
 
@@ -154,8 +154,8 @@
             <div class="gate-card">
               <div class="gate-icon">◎</div>
               <h2>ОБЗВОН НЕ ЗАПУЩЕН</h2>
-              <p id="gateText">Дождитесь команды куратора. Перед началом пройдите длинную проверку на внимательность — по умолчанию 100 заданий (можно сменить в пульте). С телефона тоже можно: на экране появятся кнопки для ответа.</p>
-              <button type="button" class="btn btn-ghost" id="btnCalibrate">◎ Калибровка (6 испытаний)</button>
+              <p id="gateText">Дождитесь команды куратора и нажмите «Начать обзвон» — обзвон доступен сразу, калибровка необязательна. Если хотите заранее настроить темп, её можно пройти отдельно. С телефона тоже можно: на экране появятся кнопки для ответа.</p>
+              <button type="button" class="btn btn-ghost" id="btnCalibrate">◎ Калибровка (необязательно)</button>
               <div class="gate-status" id="calibStatus"></div>
             </div>
           </section>
@@ -572,6 +572,16 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v7.7</div>
+                  <div class="news-body">
+                    <h3>Калибровка больше не обязательна: обзвон доступен сразу после входа</h3>
+                    <p>Обновление поднято автоматически: проверки проекта пройдены,
+                       версия разнесена по всем файлам. Подробности — в журнале
+                       изменений репозитория.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v7.6</div>
                   <div class="news-body">
                     <h3>авто-обновление: проверки пройдены</h3>
@@ -997,9 +1007,11 @@
               <div class="help-grid">
                 <div class="help-card">
                   <h3>◎ Как проходит обзвон</h3>
-                  <p>Куратор входит в «Пульт», вводит код и запускает обзвон. Сначала —
-                     калибровка (несколько испытаний для настройки темпа), затем сам сеанс:
-                     испытания внимания появляются каждые 10–25 секунд. По завершении
+                  <p>Куратор входит в «Пульт», вводит код и запускает обзвон —
+                     сразу, без калибровки: она больше не обязательна и осталась
+                     только для настройки темпа (её можно пройти отдельно по
+                     кнопке в гейте). Во время сеанса испытания внимания
+                     появляются каждые 10–25 секунд. По завершении
                      система показывает итог с фишками и отчётом.</p>
                 </div>
                 <div class="help-card">
@@ -1129,18 +1141,18 @@
   <!-- ФАЙЛ С КОДАМИ ДОСТУПА. В РЕПОЗИТОРИИ ЕГО НЕТ (.gitignore):
        он собирается на сервере или в CI из секретов. Если файла нет —
        вход в пульт и в админку невозможен (это так и задумано). -->
-  <script src="js/auth.local.js?v=7.6"></script>
-  <script src="js/fx.js?v=7.6"></script>
-  <script src="js/monitor.js?v=7.6"></script>
-  <script src="js/nav.js?v=7.6"></script>
-  <script src="js/live.js?v=7.6"></script>
-  <script src="js/archive.js?v=7.6"></script>
-  <script src="js/audit.js?v=7.6"></script>
-  <script src="js/stats.js?v=7.6"></script>
-  <script src="js/profiles.js?v=7.6"></script>
-  <script src="js/health.js?v=7.6"></script>
-  <script src="js/excel.js?v=7.6"></script>
-  <script src="js/app.js?v=7.6"></script>
+  <script src="js/auth.local.js?v=7.7"></script>
+  <script src="js/fx.js?v=7.7"></script>
+  <script src="js/monitor.js?v=7.7"></script>
+  <script src="js/nav.js?v=7.7"></script>
+  <script src="js/live.js?v=7.7"></script>
+  <script src="js/archive.js?v=7.7"></script>
+  <script src="js/audit.js?v=7.7"></script>
+  <script src="js/stats.js?v=7.7"></script>
+  <script src="js/profiles.js?v=7.7"></script>
+  <script src="js/health.js?v=7.7"></script>
+  <script src="js/excel.js?v=7.7"></script>
+  <script src="js/app.js?v=7.7"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>
