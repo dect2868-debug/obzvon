@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.4 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.5 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.4',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.5',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -507,8 +507,20 @@
     els.statusBadge.className = 'badge ' + cls;
   }
 
-  /* ---------- метрики ---------- */
+  /* ---------- метрики ----------
+     v7.5 (антилаг): раньше каждый изменившийся показатель делал
+     принудительный reflow (void offsetWidth) — до 10 пересчётов
+     вёрстки за тик. Теперь класс снимается сразу, а вешается на
+     СЛЕДУЮЩЕМ кадре (requestAnimationFrame) — анимация перезапускается
+     так же надёжно, но страница пересчитывается один раз за кадр. */
   var lastVals = {};
+  var flashPending = [];
+  var flashScheduled = false;
+  function flushFlash() {
+    flashScheduled = false;
+    for (var i = 0; i < flashPending.length; i++) flashPending[i].classList.add('flash');
+    flashPending = [];
+  }
   function setVal(el, text) {
     text = String(text);
     if (lastVals[el.id] === text) return;
@@ -517,8 +529,12 @@
     var card = el.closest('.metric');
     if (card) {
       card.classList.remove('flash');
-      void card.offsetWidth;
-      card.classList.add('flash');
+      if (flashPending.indexOf(card) < 0) flashPending.push(card);
+      if (!flashScheduled) {
+        flashScheduled = true;
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(flushFlash);
+        else flushFlash();
+      }
     }
   }
 
@@ -593,6 +609,9 @@
     });
   }
 
+  /* кэш последней разметки таблиц (антилаг v7.5) */
+  var lastTables = { stat: null, ch: null, chStat: null };
+
   function updateTables() {
     if (!els.statTable) return;
     var S = Monitor.state;
@@ -618,7 +637,10 @@
       rows = [['—', 'данные появятся после калибровки и обзвона']];
     }
     rows = sortStatRows(rows);
-    els.statTable.innerHTML =
+    /* v7.5 (антилаг): таблицы перестраивались полностью на КАЖДЫЙ тик
+       (1 раз в секунду), даже когда данные не менялись. Теперь строка
+       сравнивается с прежней — innerHTML трогаем только при изменении. */
+    var statHtml =
       '<thead><tr>' +
         '<th data-sort="label" class="' + thCls(statSort, 'label') + '">ПОКАЗАТЕЛЬ</th>' +
         '<th data-sort="value" class="' + thCls(statSort, 'value') + '">ЗНАЧЕНИЕ</th>' +
@@ -626,6 +648,10 @@
       rows.map(function (r) {
         return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(String(r[1])) + '</td></tr>';
       }).join('') + '</tbody>';
+    if (lastTables.stat !== statHtml) {
+      els.statTable.innerHTML = statHtml;
+      lastTables.stat = statHtml;
+    }
 
     /* индикаторы сортировки на статичном thead журнала испытаний */
     if (els.chTable) {
@@ -636,13 +662,17 @@
     }
 
     if (!CH_LOG.length) {
-      els.chTableBody.innerHTML = '<tr class="ch-empty"><td colspan="4">испытаний не было</td></tr>';
-      els.chStat.textContent = '';
+      var emptyHtml = '<tr class="ch-empty"><td colspan="4">испытаний не было</td></tr>';
+      if (lastTables.ch !== emptyHtml) {
+        els.chTableBody.innerHTML = emptyHtml;
+        lastTables.ch = emptyHtml;
+      }
+      if (lastTables.chStat !== '') { els.chStat.textContent = ''; lastTables.chStat = ''; }
       return;
     }
     var log = sortChLog();
     var okN = 0, sumMs = 0, msN = 0;
-    els.chTableBody.innerHTML = log.map(function (r) {
+    var chHtml = log.map(function (r) {
       if (r.ok) { okN++; if (r.ms) { sumMs += r.ms; msN++; } }
       return '<tr class="' + (r.ok ? 'ok' : 'bad') + '">' +
         '<td class="num">' + r.n + '</td>' +
@@ -650,9 +680,17 @@
         '<td class="res">' + (r.ok ? 'ВЕРНО' : 'ПРОВАЛ') + (r.note && !r.ok ? ' · ' + esc(r.note) : '') + '</td>' +
         '<td class="react">' + (r.ms ? r.ms + ' мс' : '—') + '</td></tr>';
     }).join('');
+    if (lastTables.ch !== chHtml) {
+      els.chTableBody.innerHTML = chHtml;
+      lastTables.ch = chHtml;
+    }
     var avgMs = msN ? Math.round(sumMs / msN) : null;
-    els.chStat.textContent = CH_LOG.length + ' испыт. · верно ' + okN +
+    var chStatTxt = CH_LOG.length + ' испыт. · верно ' + okN +
       ' · ср. реакция ' + (avgMs === null ? '—' : avgMs + ' мс');
+    if (lastTables.chStat !== chStatTxt) {
+      els.chStat.textContent = chStatTxt;
+      lastTables.chStat = chStatTxt;
+    }
   }
 
   /* делегирование кликов по заголовкам столбцов */
@@ -3171,7 +3209,7 @@
       }
       return '<label class="sel">' + esc(label) +
         '<input type="number" id="pol_' + k + '" class="input" min="1" max="20" value="' + esc(val) +
-        ' data-policy="' + k + '" /></label>';
+        '" data-policy="' + k + '" /></label>';
     };
     els.adminPolicies.innerHTML =
       '<div class="pol-grid">' +
@@ -3587,6 +3625,8 @@
     policies: function () { return CONFIG.policies; },
     /* журнал угроз (v6.0) */
     exportExcel: exportExcel,
+    /* обновить метрики/таблицы (нужно тестам и ручному обновлению) */
+    metrics: function () { updateMetrics(); },
     threats: function () { return THREATS.slice(); },
     /* статистика посещений и обзвонов (v6.1) */
     stats: function () { return window.Stats ? Stats.snapshot() : null; },
