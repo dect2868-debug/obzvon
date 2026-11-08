@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.12 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.13 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.12',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.13',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -758,7 +758,10 @@
   function scheduleNext() {
     if (ST.state !== 'running') return;
     clearChTimers();
-    CH.timers.push(setTimeout(function () { runChallenge(kindRoll(false), false); }, nextDelay()));
+    /* v7.13: первое испытание сеанса — ровно через 4 секунды,
+       дальше — обычный темп режима (4–8 с) */
+    var d = (CH_SEANCE <= 1) ? 4000 : nextDelay();
+    CH.timers.push(setTimeout(function () { runChallenge(kindRoll(false), false); }, d));
   }
 
   var STROOP_COLORS = [
@@ -1017,7 +1020,9 @@
     /* отложенное обновление — применяем, когда испытание закончилось */
     if (upd.deferred && !CH.active) { upd.deferred = false; applyUpdate(); }
     /* события в журнале: сеансовые испытания целиком, калибровка — только итогом */
-    if (window.Live && !CH.calib) Live.mark(ok ? 'ok' : 'fail');
+    if (window.Live && !CH.calib) {
+      Live.mark(ok ? 'ok' : 'fail', ok ? ('Верно · ' + reaction + ' мс') : 'Испытание провалено');
+    }
     if (CH.calib) {
       if (ST.calibDone >= CONFIG.calibCount) {
         feedAdd({ time: ts(), label: 'Калибровка пройдена · база реакции ' + (ST.baseReaction || Monitor.avgReaction() || '—') + ' мс', sev: 0 });
@@ -1155,6 +1160,10 @@
      ============================================================ */
   function elapsed() { return ST.startedAt + (ST.state === 'running' ? Date.now() - ST.runSince : 0); }
 
+  /* источник данных графика живой динамики (v7.13): Live тянет значения
+     сам на своём тике — линия рисуется, даже если тик монитора не дойдёт */
+  function liveSource() { return [Monitor.concentration(), Monitor.cheatPercent()]; }
+
   function startSession() {
     if (ST.state !== 'idle') { toast('Сейчас это недоступно', 'bad'); return; }
     /* v7.9: старт доступен каждому участнику — без кода куратора и без калибровки */
@@ -1183,11 +1192,11 @@
     feedAdd({ time: ts(), label: 'Обзвон начат · сессия ' + ST.sessionId, sev: 0 });
     if (window.Stats) Stats.count('session.start');
     if (window.Audit) Audit.log('session.start', 'сессия ' + ST.sessionId);
-    toast('Обзвон начат. Испытания будут появляться каждые 4–8 секунд', 'good');
+    toast('Обзвон начат. Первое испытание — через 4 секунды, далее каждые 4–8 секунд', 'good');
     beep(660, 200, 'sine', .05);
     CH_SEANCE = 1;
-    /* живой график сессии (v4.0) */
-    if (window.Live) { Live.reset(); Live.start(); }
+    /* живой график сессии (v4.0) — со своим источником значений (v7.13) */
+    if (window.Live) { Live.reset(); Live.start(liveSource); }
     scheduleNext();
     saveState();
   }
@@ -1214,7 +1223,7 @@
     ST.state = 'running';
     ST.runSince = Date.now();
     Monitor.setRunning(true);
-    if (window.Live) Live.start();
+    if (window.Live) Live.start(liveSource);
     els.pauseOverlay.hidden = true;
     setBadge('идёт', 'badge-run');
     els.btnPause.disabled = false;
@@ -1753,7 +1762,7 @@
       feedAdd({ time: ts(), label: 'Подмена данных сессии — подпись не совпала (+20)', sev: 2 });
       toast('Обнаружена подмена данных сессии! +20 к «читомеряку»', 'bad', 6000);
     }
-    if (window.Live) { Live.reset(); Live.start(); }
+    if (window.Live) { Live.reset(); Live.start(liveSource); }
     scheduleNext();
     updateMetrics();
   }
@@ -2313,7 +2322,7 @@
     updateTables();
     Monitor.setRunning(true);   /* на калибровке тоже ловим смену вкладок и уходы */
     /* график живой динамики включается сразу (v4.1) */
-    if (window.Live) { Live.reset(); Live.start(); }
+    if (window.Live) { Live.reset(); Live.start(liveSource); }
     els.btnStart.disabled = true;
     els.calibStatus.innerHTML = '<span class="good">калибровка началась…</span>';
     runChallenge(kindRoll(true), true);
@@ -2335,8 +2344,9 @@
       setTimeout(function () { document.body.classList.remove('shake'); }, 400);
       beep(item.sev >= 2 ? 220 : 440, 180, 'square', .04);
       updateMetrics();
-      /* живой график: отметка нарушения + волна на фоне (v4.0) */
-      if (window.Live) Live.mark('viol');
+      /* живой график: отметка нарушения + волна на фоне (v4.0),
+         подпись события уходит в живую ленту (v7.13) */
+      if (window.Live) Live.mark('viol', item.label);
       if (window.FX) {
         var r = els.metrics ? els.metrics.getBoundingClientRect() : null;
         FX.pulse(r ? r.left + r.width / 2 : (window.innerWidth / 2),
@@ -2360,7 +2370,11 @@
           els.sessionTimer.textContent = fmt(elapsed());
           if (shouldLock()) lockSession();
         }
-        if (window.Live) Live.sample(Monitor.concentration(), Monitor.cheatPercent());
+        if (window.Live) {
+          /* самопочинка: если график не запущен — стартуем с первого тика (v7.13) */
+          if (!Live.running()) Live.start(liveSource);
+          Live.sample(Monitor.concentration(), Monitor.cheatPercent());
+        }
       }
     }
   }, { idleLimit: CONFIG.idleLimit });

@@ -1,10 +1,13 @@
 /* ============================================================
-   ОБЗВОН v7.12 · LIVE — живая динамика сессии
+   ОБЗВОН v7.13 · LIVE — живая динамика сессии
    График концентрации и «читомеряка» в реальном времени,
    отметки испытаний и нарушений, живая лента событий.
    v4.1: самопочинка (repair), адаптация к размеру окна,
    работает с самого начала обзвона (включая калибровку),
    значения в шапке панели и пульсирующий индикатор LIVE.
+   v7.13: линия рисуется сразу — первый замер в момент старта,
+   свой источник данных (график живёт даже если тик монитора
+   не дойдёт), защита от NaN-значений и потери canvas-контекста.
    ============================================================ */
 (function () {
   'use strict';
@@ -23,7 +26,8 @@
   var lastEvent = '';
   var stats = { max: 0, min: 100, sum: 0, n: 0, peakCheat: 0 };
   var ro = null;
-  var animTimer = null;     /* плавная перерисовка во время сессии (v4.8) */
+  var animTimer = null;
+  var source = null;        /* функция-источник свежих значений (v7.13) */     /* плавная перерисовка во время сессии (v4.8) */
 
   function el(id) { return document.getElementById(id); }
 
@@ -55,7 +59,24 @@
     if (!ctx && cv.getContext) {
       try { ctx = cv.getContext('2d'); } catch (e2) { ctx = null; }
     }
+    bindCtxLoss();
     return !!ctx;
+  }
+
+  /* потеря контекста рисования (сброс GPU) — линия перестаёт появляться,
+     хотя данные идут: перехватываем событие и пересоздаём (v7.13) */
+  function bindCtxLoss() {
+    if (!cv || cv.__ctxLossBound || !cv.addEventListener) return;
+    cv.__ctxLossBound = true;
+    cv.addEventListener('contextlost', function (e) {
+      if (e && e.preventDefault) e.preventDefault();
+      ctx = null;
+    }, false);
+    cv.addEventListener('contextrestored', function () {
+      ctx = null;
+      ensureCanvas();
+      resize();
+    }, false);
   }
 
   function observe() {
@@ -129,8 +150,14 @@
   }
 
   function sample(conc, cheat) {
-    var c = Math.max(0, Math.min(100, Math.round(conc || 0)));
-    var x = Math.max(0, Math.min(100, Math.round(cheat || 0)));
+    /* защита от NaN/undefined: одна нечисловая точка «убивает» линию —
+       canvas молча перестаёт рисовать путь (v7.13) */
+    var c = Math.round(Number(conc));
+    var x = Math.round(Number(cheat));
+    if (!isFinite(c)) c = last.c || 0;
+    if (!isFinite(x)) x = last.x || 0;
+    c = Math.max(0, Math.min(100, c));
+    x = Math.max(0, Math.min(100, x));
     last.c = c; last.x = x;
     if (!t0) t0 = Date.now();          /* первый замер задаёт начало отсчёта */
     var t = Date.now() - t0;
@@ -153,17 +180,34 @@
     draw();
   }
 
-  function start() {
+  function start(src) {
+    if (typeof src === 'function') source = src;
     if (running) return;
     running = true;
     if (!t0) t0 = Date.now();
     clearInterval(timer);
-    timer = setInterval(function () { sample(last.c, last.x); }, 1000);
+    timer = setInterval(function () {
+      var v = pullSource();
+      if (v) sample(v[0], v[1]); else sample(last.c, last.x);
+    }, 1000);
     /* мягкая перерисовка 20 раз в секунду: «живая точка» на конце линии
        и ореол дышат плавно, без рывков (v4.8) */
     clearInterval(animTimer);
     animTimer = setInterval(draw, 50);
     setLive(true);
+    /* первый замер сразу при старте — линия появляется мгновенно,
+       без паузы «ожидание данных сессии…» (v7.13) */
+    var v0 = pullSource();
+    if (v0) sample(v0[0], v0[1]);
+  }
+
+  function pullSource() {
+    if (!source) return null;
+    try {
+      var v = source();
+      if (v && isFinite(Math.round(Number(v[0])))) return v;
+    } catch (e) { /* источник недоступен — берём последнее значение */ }
+    return null;
   }
 
   function stop() {
@@ -239,7 +283,7 @@
       ctx.fillText(v + '', padL - 5, y);
     });
 
-    if (samples.length < 2) {
+    if (samples.length < 1) {
       /* ожидание: пульсирующая линия + подсказка */
       var pulse = 0.5 + 0.5 * Math.sin(Date.now() / 400);
       ctx.strokeStyle = 'rgba(140,175,205,' + (0.18 + pulse * 0.18).toFixed(3) + ')';
@@ -262,23 +306,32 @@
     function py(v) { return padT + gh - (v / 100) * gh; }
 
     /* заливка под линией концентрации */
-    var grad = ctx.createLinearGradient(0, padT, 0, padT + gh);
-    grad.addColorStop(0, 'rgba(99,223,148,.16)');
-    grad.addColorStop(1, 'rgba(91,255,157,0)');
-    ctx.beginPath();
-    ctx.moveTo(px(samples[0].t), py(0));
-    samples.forEach(function (s) { ctx.lineTo(px(s.t), py(s.c)); });
-    ctx.lineTo(px(samples[samples.length - 1].t), py(0));
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+    if (samples.length > 1) {
+      var grad = ctx.createLinearGradient(0, padT, 0, padT + gh);
+      grad.addColorStop(0, 'rgba(99,223,148,.16)');
+      grad.addColorStop(1, 'rgba(91,255,157,0)');
+      ctx.beginPath();
+      ctx.moveTo(px(samples[0].t), py(0));
+      samples.forEach(function (s) { ctx.lineTo(px(s.t), py(s.c)); });
+      ctx.lineTo(px(samples[samples.length - 1].t), py(0));
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
 
-    /* линия концентрации */
+    /* линия концентрации (при одном замере — короткий отрезок от оси,
+       чтобы линия была видна сразу, а не через секунды) */
     ctx.beginPath();
-    samples.forEach(function (s, i) {
-      var x = px(s.t), y = py(s.c);
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
+    if (samples.length === 1) {
+      ctx.moveTo(padL, py(samples[0].c));
+      ctx.lineTo(px(samples[0].t), py(samples[0].c));
+      ctx.lineTo(px(samples[0].t), py(samples[0].c) - 0.01);
+    } else {
+      samples.forEach(function (s, i) {
+        var x = px(s.t), y = py(s.c);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+    }
     ctx.strokeStyle = '#63df94';
     ctx.lineWidth = 1.6;
     ctx.shadowColor = 'rgba(99,223,148,.35)';
@@ -288,10 +341,16 @@
 
     /* линия читомеряка */
     ctx.beginPath();
-    samples.forEach(function (s, i) {
-      var x = px(s.t), y = py(s.x);
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
+    if (samples.length === 1) {
+      ctx.moveTo(padL, py(samples[0].x));
+      ctx.lineTo(px(samples[0].t), py(samples[0].x));
+      ctx.lineTo(px(samples[0].t), py(samples[0].x) - 0.01);
+    } else {
+      samples.forEach(function (s, i) {
+        var x = px(s.t), y = py(s.x);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+    }
     ctx.strokeStyle = '#f0616f';
     ctx.lineWidth = 1.4;
     ctx.shadowColor = 'rgba(240,97,111,.3)';

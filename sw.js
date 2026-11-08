@@ -15,7 +15,7 @@
    изменился.
    ============================================================ */
 
-var CACHE_NAME = 'obzvon-shell-v7.11';
+var CACHE_NAME = 'obzvon-shell-v7.13';
 var CACHE_PREFIX = 'obzvon-shell-';
 
 /* файлы, которые нужны для работы без сети */

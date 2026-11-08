@@ -192,13 +192,17 @@ s.test('сессия: ID, водяной знак, метрики и живой 
   eq(t.el('gate').hidden, true, 'гейт не скрыт');
   eq(t.el('playfield').hidden, false, 'арена не показана');
 
-  /* живой график набирает точки */
+  /* живой график набирает точки: первый замер пишется сразу при старте (v7.13) */
+  const n0 = t.win.Live.stats().n;
+  assert(n0 >= 1, 'первый замер не сделан сразу при старте (n=' + n0 + ')');
+  const sum0 = t.win.Live.stats().avg * n0;
   t.win.Live.sample(92, 4);
   t.win.Live.sample(88, 9);
   await sleep(30);
   const st = t.win.Live.stats();
-  eq(st.n >= 2, true, 'график не набрал замеры');
-  eq(st.avg, 90, 'средняя по графику');
+  eq(st.n, n0 + 2, 'график не набрал замеры');
+  /* среднее — по всем замерам, включая мгновенный первый */
+  eq(st.avg, Math.round((sum0 + 92 + 88) / st.n), 'средняя по графику');
   eq(st.peakCheat, 9, 'пик читомеряка');
   assert(/средняя/.test(t.el('liveSummary').textContent), 'нет сводки под графиком');
 
