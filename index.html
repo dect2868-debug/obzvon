@@ -12,7 +12,7 @@
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#0b0f17" />
-  <link rel="stylesheet" href="css/styles.css?v=7.10" />
+  <link rel="stylesheet" href="css/styles.css?v=7.11" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -38,7 +38,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.10</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 7.11</div>
         </div>
       </div>
 
@@ -573,6 +573,16 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v7.11</div>
+                  <div class="news-body">
+                    <h3>Быстрый темп: испытания каждые 4–8 секунд без долгого ожидания</h3>
+                    <p>Убран разгон первых испытаний (ждали ~19–20 секунд).
+                       Теперь обзвон идёт ровно и быстро: обычный режим — 4–8 с,
+                       «Спринт» — 2.5–5.5 с, «Тренировка» — 6–12 с.</p>
+                    <a class="news-area" data-view="news">обновление</a>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v7.10</div>
                   <div class="news-body">
                     <h3>авто-обновление: проверки пройдены</h3>
@@ -1045,7 +1055,7 @@
                      сразу, без кода куратора и без калибровки. Куратор может
                      присоединиться через «Пульт», чтобы видеть метрики и
                      управлять сеансом. Во время сеанса испытания внимания
-                     появляются каждые 10–25 секунд. По завершении
+                     появляются каждые 4–8 секунд. По завершении
                      система показывает итог с фишками и отчётом.</p>
                 </div>
                 <div class="help-card">
@@ -1175,18 +1185,18 @@
   <!-- ФАЙЛ С КОДАМИ ДОСТУПА. В РЕПОЗИТОРИИ ЕГО НЕТ (.gitignore):
        он собирается на сервере или в CI из секретов. Если файла нет —
        вход в пульт и в админку невозможен (это так и задумано). -->
-  <script src="js/auth.local.js?v=7.10"></script>
-  <script src="js/fx.js?v=7.10"></script>
-  <script src="js/monitor.js?v=7.10"></script>
-  <script src="js/nav.js?v=7.10"></script>
-  <script src="js/live.js?v=7.10"></script>
-  <script src="js/archive.js?v=7.10"></script>
-  <script src="js/audit.js?v=7.10"></script>
-  <script src="js/stats.js?v=7.10"></script>
-  <script src="js/profiles.js?v=7.10"></script>
-  <script src="js/health.js?v=7.10"></script>
-  <script src="js/excel.js?v=7.10"></script>
-  <script src="js/app.js?v=7.10"></script>
+  <script src="js/auth.local.js?v=7.11"></script>
+  <script src="js/fx.js?v=7.11"></script>
+  <script src="js/monitor.js?v=7.11"></script>
+  <script src="js/nav.js?v=7.11"></script>
+  <script src="js/live.js?v=7.11"></script>
+  <script src="js/archive.js?v=7.11"></script>
+  <script src="js/audit.js?v=7.11"></script>
+  <script src="js/stats.js?v=7.11"></script>
+  <script src="js/profiles.js?v=7.11"></script>
+  <script src="js/health.js?v=7.11"></script>
+  <script src="js/excel.js?v=7.11"></script>
+  <script src="js/app.js?v=7.11"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

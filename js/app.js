@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.10 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v7.11 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.10',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '7.11',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -77,11 +77,11 @@
        Один и тот же движок — разный характер: темп, набор испытаний,
        жёсткость. Режим выбирает куратор в пульте или приходит из config.json. */
     modes: {
-      normal: { label: 'Обычный',    speed: 1,    delay: [6000, 14000], kinds: null },
-      sprint: { label: 'Спринт',     speed: 0.8,  delay: [4000, 9000],  kinds: null },
-      exam:   { label: 'Экзамен',    speed: 1.05, delay: [5000, 11000],
+      normal: { label: 'Обычный',    speed: 1,    delay: [4000, 8000], kinds: null },
+      sprint: { label: 'Спринт',     speed: 0.8,  delay: [2500, 5500],  kinds: null },
+      exam:   { label: 'Экзамен',    speed: 1.05, delay: [3500, 7500],
                 kinds: ['math', 'seq', 'stroop', 'ink', 'count'] },
-      warmup: { label: 'Тренировка', speed: 1.35, delay: [9000, 20000],
+      warmup: { label: 'Тренировка', speed: 1.35, delay: [6000, 12000],
                 kinds: ['key', 'target'] }
     },
     mode: 'normal',        // текущий режим обзвона
@@ -747,12 +747,12 @@
     return k;
   }
 
-  /* темп: первые 3 испытания — щадящие, дальше ускоряется */
+  /* темп (v7.11): ровный и быстрый — без долгого ожидания.
+     Раньше первые 3 испытания ждали ~19–20 с, обычные — 6–14 с. */
   function nextDelay() {
     var m = mode();
-    var d = (m && m.delay) ? m.delay : [6000, 14000];
-    var early = CH_SEANCE <= 3;
-    return rnd(early ? Math.round(d[1] * 1.35) : d[0], early ? Math.round(d[1] * 1.45) : d[1]);
+    var d = (m && m.delay) ? m.delay : [4000, 8000];
+    return rnd(d[0], d[1]);
   }
 
   function scheduleNext() {
@@ -854,15 +854,17 @@
         els.stroopRow.appendChild(b2);
       });
     } else if (kind === 'count') {
-      /* «Счёт»: посчитать нужные символы среди других */
+      /* «Счёт»: посчитать нужные символы среди других.
+         v7.11: в строку кладётся РОВНО nStar звёзд — иначе ответ был
+         нечестным (участник считает, а верным считается другое число),
+         а тест ловил флаки (2 звезды вместо 3+). */
       var targetSym = '★';
       var otherSym = ['●', '▲', '■', '◆', '○'];
       var nStar = rnd(3, 9);
-      var totalSym = nStar + rnd(3, 6);
+      var nOther = rnd(3, 6);
       var chars = [];
-      for (var ci = 0; ci < totalSym; ci++) {
-        chars.push(Math.random() < 0.55 ? targetSym : otherSym[rnd(0, otherSym.length - 1)]);
-      }
+      for (var ci = 0; ci < nStar; ci++) chars.push(targetSym);
+      for (var oi = 0; oi < nOther; oi++) chars.push(otherSym[rnd(0, otherSym.length - 1)]);
       chars.sort(function () { return Math.random() - 0.5; });
       CH.answer = String(nStar);
       CH.countHtml = '<div class="count-row">' + chars.join('') + '</div>';
@@ -1181,7 +1183,7 @@
     feedAdd({ time: ts(), label: 'Обзвон начат · сессия ' + ST.sessionId, sev: 0 });
     if (window.Stats) Stats.count('session.start');
     if (window.Audit) Audit.log('session.start', 'сессия ' + ST.sessionId);
-    toast('Обзвон начат. Испытания будут появляться каждые 10–25 секунд', 'good');
+    toast('Обзвон начат. Испытания будут появляться каждые 4–8 секунд', 'good');
     beep(660, 200, 'sine', .05);
     CH_SEANCE = 1;
     /* живой график сессии (v4.0) */
