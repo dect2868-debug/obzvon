@@ -15,7 +15,7 @@
    изменился.
    ============================================================ */
 
-var CACHE_NAME = 'obzvon-shell-v8.0';
+var CACHE_NAME = 'obzvon-shell-v9.0';
 var CACHE_PREFIX = 'obzvon-shell-';
 
 /* файлы, которые нужны для работы без сети */
@@ -35,6 +35,7 @@ var SHELL = [
   './js/health.js',
   './js/excel.js',
   './js/moder.js',
+  './js/updater.js',
   './js/app.js',
   './js/auth.local.js',
   './version.json',

@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v8.1 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v9.0 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '8.1',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '9.0',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -62,6 +62,10 @@
     idleLimit: 65000,         // мс простоя до штрафа
     storageKey: 'obzvon_v2_state',
     updateCheckMs: 60000,     // как часто проверять новую версию, мс
+    /* центр обновлений (v9.0): куда публиковать новую сборку.
+       Токен GitHub в админке вводится модератором и живёт только
+       в памяти вкладки — в репозитории его нет. */
+    deploy: { owner: '', repo: '', workflow: 'pages.yml', branch: 'main' },
     autoUpdateMs: 5000,       // пауза перед авто-обновлением (вне сессии), мс
     postSessionUpdateMs: 20000, /* пауза перед обновлением после обзвона, мс */
     integrityCheckMs: 20000,  // как часто сверять целостность DOM и кода, мс
@@ -329,7 +333,10 @@
     'btnAdminProfiles','btnAdminHtml','btnAdminExportAll','btnAdminExcel','selMode','selDensity',
     'chkBigButtons','selVolume','btnAdminApplyUi',
     'liveNext','sumKinds','sumModer','adminModer','btnModerRefresh','btnModerClear',
-    'btnBreak','btnLink','moderRisk']
+    'btnBreak','btnLink','moderRisk',
+    'adminUpdateState','adminUpdateNotes','adminUpdateLog','btnAdminPublish',
+    'btnAdminBackup','btnAdminRestore','adminBackupFile',
+    'updOwner','updRepo','updWorkflow','updToken']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- реестр слушателей и таймеров (v4.2) ----------
@@ -2724,7 +2731,7 @@
      вариант с обычной перезагрузкой. */
   var MODULES = ['js/fx.js', 'js/monitor.js', 'js/nav.js', 'js/live.js',
                  'js/archive.js', 'js/audit.js', 'js/stats.js', 'js/profiles.js',
-                 'js/health.js', 'js/app.js'];
+                 'js/health.js', 'js/excel.js', 'js/moder.js', 'js/updater.js', 'js/app.js'];
 
   function fallbackReload(v) {
     try {
@@ -2800,6 +2807,8 @@
     fetch('version.json?ts=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
+        /* центр обновлений следит за тем же ответом (v9.0) */
+        if (window.Updater && d && d.v) Updater.observe(d.v, d.notes || '');
         if (d && d.v && d.v !== CONFIG.appVersion) {
           showUpdateBanner(d.v, d.notes || '');
           /* новая версия — попросить воркер перезабрать офлайн-кэш */
@@ -2818,6 +2827,141 @@
   }
   setTimeout(function () { checkUpdates(false); }, 5000);
   every(CONFIG.updateCheckMs, function () { checkUpdates(false); });
+
+  /* ---------- центр обновлений (v9.0): самостоятельная админка ---------- */
+  if (window.Updater) {
+    Updater.init({
+      current: CONFIG.appVersion,
+      check: function () { checkUpdates(false); },
+      apply: function () { return applyUpdate(); },
+      deploy: CONFIG.deploy || {}
+    });
+  }
+
+  function adminUpdaterRender() {
+    if (!admin.authed) return;
+    var st = window.Updater ? Updater.status() : null;
+    if (!st) {
+      if (els.adminUpdateState) els.adminUpdateState.textContent = 'состояние: модуль обновлений не загружен';
+      return;
+    }
+    if (els.adminUpdateState) {
+      els.adminUpdateState.innerHTML = 'состояние: <b>' + esc(st.message || st.state) + '</b> · установлено v' +
+        esc(st.current) + (st.available ? ' · доступно <b>v' + esc(st.available) + '</b>' : '') +
+        (st.deploy.hasToken ? ' · токен принят' : '');
+    }
+    if (els.adminUpdateNotes) {
+      els.adminUpdateNotes.innerHTML = 'что нового: ' + (st.notes ? esc(st.notes) : '—');
+    }
+    if (els.adminUpdateLog) {
+      els.adminUpdateLog.innerHTML = (st.log || []).map(function (h) {
+        var d = new Date(h.at);
+        function p(n) { return ('0' + n).slice(-2); }
+        return '<li><time>' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) +
+          '</time>' + esc(h.msg) + '</li>';
+      }).join('');
+    }
+    /* репозиторий для публикации — из config.json, но его можно поправить руками */
+    if (els.updOwner && !els.updOwner.value && st.deploy.owner) els.updOwner.value = st.deploy.owner;
+    if (els.updRepo && !els.updRepo.value && st.deploy.repo) els.updRepo.value = st.deploy.repo;
+    if (els.updWorkflow && !els.updWorkflow.value && st.deploy.workflow) els.updWorkflow.value = st.deploy.workflow;
+  }
+
+  /* публикация новой сборки прямо из админки */
+  function adminPublishUpdate() {
+    if (!admin.authed) { adminToast('Нужен код тех. администратора', 'bad'); return; }
+    if (!window.Updater) { adminToast('Модуль обновлений не загружен', 'bad'); return; }
+    var owner = els.updOwner ? els.updOwner.value.trim() : '';
+    var repo = els.updRepo ? els.updRepo.value.trim() : '';
+    var wf = els.updWorkflow ? els.updWorkflow.value.trim() : 'pages.yml';
+    var token = els.updToken ? els.updToken.value.trim() : '';
+    if (owner && repo) Updater.init({ deploy: { owner: owner, repo: repo, workflow: wf } });
+    if (!token) {
+      adminToast('Введите токен GitHub — он живёт только в памяти вкладки', 'bad');
+      return;
+    }
+    Updater.deploy(token).then(function (ok) {
+      adminUpdaterRender();
+      adminToast(ok ? 'Публикация запущена — сборка идёт на GitHub' : 'Публикация не запущена', ok ? 'good' : 'bad');
+      if (window.Audit) Audit.log('update.publish', 'публикация: ' + (owner || '?') + '/' + (repo || '?'));
+    });
+  }
+
+  /* ---------- резервная копия настроек админки (v9.0) ---------- */
+  function adminBackupSettings() {
+    var data = {
+      savedAt: new Date().toISOString(),
+      appVersion: CONFIG.appVersion,
+      threshold: ST.threshold,
+      calibCount: CONFIG.calibCount,
+      idleLimit: CONFIG.idleLimit,
+      mode: CONFIG.mode,
+      policies: CONFIG.policies,
+      features: CONFIG.features,
+      ui: CONFIG.ui
+    };
+    try {
+      var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'obzvon-settings-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      if (window.Audit) Audit.log('admin.backup', 'сохранены настройки админки');
+      toast('Настройки сохранены в файл', 'good');
+    } catch (e) {
+      toast('Не удалось сохранить настройки', 'bad');
+    }
+  }
+
+  function adminRestoreSettings(file) {
+    if (!file) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      try {
+        var d = JSON.parse(String(fr.result || ''));
+        if (!d || typeof d !== 'object') throw new Error('bad');
+        var applied = [];
+        if (typeof d.threshold === 'number' && d.threshold >= 10 && d.threshold <= 100) {
+          ST.threshold = d.threshold;
+          if (els.selThreshold) els.selThreshold.value = String(d.threshold);
+          applied.push('порог ' + d.threshold + '%');
+        }
+        if ([6, 10, 20, 50, 100].indexOf(d.calibCount) >= 0) {
+          CONFIG.calibCount = d.calibCount;
+          applied.push('калибровка ' + d.calibCount);
+        }
+        if (typeof d.idleLimit === 'number' && d.idleLimit >= 10000) {
+          CONFIG.idleLimit = d.idleLimit;
+          applied.push('простой ' + Math.round(d.idleLimit / 1000) + ' с');
+        }
+        if (d.policies && typeof d.policies === 'object') {
+          Object.keys(d.policies).forEach(function (k) {
+            if (!Object.prototype.hasOwnProperty.call(CONFIG.policies, k)) return;
+            var v = d.policies[k];
+            if (typeof CONFIG.policies[k] === 'number' && typeof v === 'number') CONFIG.policies[k] = v;
+            else if (typeof CONFIG.policies[k] === 'boolean') CONFIG.policies[k] = !!v;
+            else if (typeof CONFIG.policies[k] === 'string' && typeof v === 'string') CONFIG.policies[k] = v.slice(0, 300);
+          });
+          applyPolicies();
+          applied.push('политики');
+        }
+        if (d.mode && CONFIG.modes[d.mode]) { CONFIG.mode = d.mode; applied.push('режим ' + d.mode); }
+        if (d.features && typeof d.features === 'object') {
+          Object.keys(d.features).forEach(function (k) {
+            if (Object.prototype.hasOwnProperty.call(CONFIG.features, k)) CONFIG.features[k] = !!d.features[k];
+          });
+          applied.push('возможности');
+        }
+        if (d.ui && typeof d.ui === 'object') { CONFIG.ui = d.ui; saveUi(); applied.push('интерфейс'); }
+        if (window.Audit) Audit.log('admin.restore', 'загружены настройки: ' + applied.join(', '));
+        toast('Настройки применены: ' + (applied.join(', ') || 'ничего'), applied.length ? 'good' : '');
+      } catch (e) {
+        toast('Файл настроек не читается', 'bad');
+      }
+    };
+    try { fr.readAsText(file); } catch (e2) { toast('Файл не прочитан', 'bad'); }
+  }
 
   if (els.btnUpdateNow) on(els.btnUpdateNow, 'click', applyUpdate);
   if (els.btnUpdateLater) on(els.btnUpdateLater, 'click', function () {
@@ -3007,6 +3151,11 @@
     if (cfg.collect && typeof cfg.collect.url === 'string' && cfg.collect.url) {
       if (window.Stats) Stats.setCollector(cfg.collect.url);
       applied.push('сборщик статистики: ' + cfg.collect.url.slice(0, 60));
+    }
+    /* куда публиковать новые сборки (v9.0) — токен вводится в админке */
+    if (cfg.deploy && typeof cfg.deploy === 'object' && window.Updater) {
+      Updater.init({ deploy: cfg.deploy });
+      applied.push('публикация: ' + (cfg.deploy.owner || '—') + '/' + (cfg.deploy.repo || '—'));
     }
     if (typeof cfg.banner === 'string' && cfg.banner) {
       applied.push('объявление на странице');
@@ -3223,6 +3372,7 @@
     if (link) link.classList.toggle('locked', !admin.authed);
     if (admin.authed) {
       adminUpdateInfo();
+      adminUpdaterRender();
       adminWatchRender();
       adminAuditRender();
       adminBuildRender();
@@ -3267,6 +3417,9 @@
       adminRender();
       adminToast('Админка открыта: тех. администратор', 'good');
       if (window.Health) Health.check();
+      /* центр обновлений: сразу смотрим, есть ли новая версия (v9.0) */
+      checkUpdates(false);
+      adminUpdaterRender();
       return true;
     }
     gateFail(GATES.admin, 'админка');
@@ -3305,7 +3458,8 @@
     if (upd.applying) { adminToast('Обновление уже применяется', ''); return; }
     var v = upd.found;
     upd.found = v;
-    var ok = applyUpdate();
+    var ok = window.Updater ? Updater.apply() : applyUpdate();
+    adminUpdaterRender();
     adminToast(ok ? ('Обновление до v' + v + ' применяется в фоне — обзвон не прерывается')
                    : ('Обновление отложено до конца текущего испытания'), 'good');
   }
@@ -3693,6 +3847,17 @@
   if (els.btnAdminLock) on(els.btnAdminLock, 'click', adminLock);
   if (els.btnAdminCheck) on(els.btnAdminCheck, 'click', adminCheckUpdates);
   if (els.btnAdminUpdate) on(els.btnAdminUpdate, 'click', adminApplyUpdate);
+  /* ---------- центр обновлений: публикация и резервная копия (v9.0) ---------- */
+  if (els.btnAdminPublish) on(els.btnAdminPublish, 'click', adminPublishUpdate);
+  if (els.btnAdminBackup) on(els.btnAdminBackup, 'click', adminBackupSettings);
+  if (els.btnAdminRestore) on(els.btnAdminRestore, 'click', function () {
+    if (els.adminBackupFile) els.adminBackupFile.click();
+  });
+  if (els.adminBackupFile) on(els.adminBackupFile, 'change', function () {
+    var f = els.adminBackupFile.files && els.adminBackupFile.files[0];
+    adminRestoreSettings(f);
+    try { els.adminBackupFile.value = ''; } catch (e) {}
+  });
   if (els.btnAdminStress) on(els.btnAdminStress, 'click', function () { adminStressTest(20000); });
   if (els.btnAdminStressSmall) on(els.btnAdminStressSmall, 'click', function () { adminStressTest(5000); });
   if (els.btnAdminRefresh) on(els.btnAdminRefresh, 'click', function () {
@@ -3801,7 +3966,7 @@
   });
   /* живой надзор: обновляем раз в секунду, пока админка открыта */
   every(1000, function () { if (admin.authed) adminWatchRender(); });
-  every(5000, function () { if (admin.authed) adminAuditRender(); });
+  every(5000, function () { if (admin.authed) { adminAuditRender(); adminUpdaterRender(); } });
   every(10000, function () { if (admin.authed) adminStatsRender(); });
   every(15000, function () { if (admin.authed) adminProfilesRender(); });
   every(12000, function () { if (admin.authed) adminModerRender(); });
@@ -3889,6 +4054,22 @@
         (item.sessionId || item.id) + ' → ' + decision + ' (риск ' + item.risk + '%)');
       adminModerRender();
       return true;
+    },
+    /* центр обновлений (v9.0) — состояние видно только тех. администратору */
+    updater: function () {
+      if (!admin.authed) return { authed: false, status: null };
+      return { authed: true, status: window.Updater ? Updater.status() : null };
+    },
+    /* публикация новой сборки через GitHub Actions (только тех. администратору).
+       Токен передаётся один раз и живёт только в памяти вкладки. */
+    publishUpdate: function (token) {
+      if (!admin.authed) { toast('Нужен код тех. администратора', 'bad'); return Promise.resolve(false); }
+      if (!window.Updater) return Promise.resolve(false);
+      return Updater.deploy(token).then(function (ok) {
+        if (ok && window.Audit) Audit.log('update.publish', 'публикация новой сборки (API)');
+        adminUpdaterRender();
+        return ok;
+      });
     },
     /* отпечаток загруженного кода — для сверки с опубликованным */
     integrityFile: function () { return publishedIntegrity; },

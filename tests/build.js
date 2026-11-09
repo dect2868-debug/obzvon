@@ -40,9 +40,13 @@ s.test('однофайловая версия самодостаточна: не
   assert(!html.includes('assets/logo.svg'), 'логотип не встроен');
   /* никаких внешних адресов, кроме xmlns внутри data: */
   /* www.w3.org и schemas.openxmlformats.org — это пространства имён XML
-     (идентификаторы, их никто не скачивает), они разрешены */
+     (идентификаторы, их никто не скачивает), они разрешены;
+     api.github.com — разрешение в connect-src для публикации обновлений
+     из админки (само разрешение ничего не скачивает) */
   const urls = (html.match(/https?:\/\/[^\s"')]+/g) || [])
-    .filter((u) => u.indexOf('www.w3.org') < 0 && u.indexOf('schemas.openxmlformats.org') < 0);
+    .filter((u) => u.indexOf('www.w3.org') < 0 &&
+                   u.indexOf('schemas.openxmlformats.org') < 0 &&
+                   u.indexOf('api.github.com') < 0);
   eq(urls.length, 0, 'внешние адреса: ' + urls.slice(0, 3).join(', '));
 });
 

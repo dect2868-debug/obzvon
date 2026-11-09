@@ -6,13 +6,13 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="description" content="Закрытая система обзвона" />
   <meta name="referrer" content="no-referrer" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data:; connect-src 'self' https://api.github.com; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <title>ROLEPLAY · ОБЗВОН — система обзвона</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#0b0f17" />
-  <link rel="stylesheet" href="css/styles.css?v=8.1" />
+  <link rel="stylesheet" href="css/styles.css?v=9.0" />
 </head>
 <body>
   <div class="bg-fx" aria-hidden="true">
@@ -38,7 +38,7 @@
         </span>
         <div class="side-brand-text">
           <h1>ROLEPLAY <span>ОБЗВОН</span></h1>
-          <div class="hero-sub" id="verBadge">ВЕРСИЯ 8.1</div>
+          <div class="hero-sub" id="verBadge">ВЕРСИЯ 9.0</div>
         </div>
       </div>
 
@@ -528,13 +528,35 @@
                   </div>
                 </div>
                 <div class="admin-block">
-                  <div class="admin-block-title">ОБНОВЛЕНИЯ</div>
+                  <div class="admin-block-title">ЦЕНТР ОБНОВЛЕНИЙ (v9.0)</div>
                   <div class="admin-row" id="adminUpdateInfo">установлена <b>v4.2</b></div>
+                  <div class="admin-row" id="adminUpdateState">состояние: —</div>
+                  <div class="admin-row" id="adminUpdateNotes">что нового: —</div>
                   <div class="health-tools">
                     <button type="button" class="btn btn-ghost" id="btnAdminCheck" title="Проверить наличие новой версии">⟳ Проверить</button>
-                    <button type="button" class="btn btn-go" id="btnAdminUpdate" title="Применить обновление в фоне, не прерывая обзвон">⬆ Обновить в фоне</button>
+                    <button type="button" class="btn btn-go" id="btnAdminUpdate" title="Установить найденное обновление в фоне, не прерывая обзвон">⬇ Установить обновление</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminPublish" title="Запустить публикацию новой сборки через GitHub Actions">🚀 Опубликовать</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminBackup" title="Сохранить настройки админки в файл">⬇ Настройки</button>
+                    <button type="button" class="btn btn-ghost" id="btnAdminRestore" title="Загрузить настройки админки из файла">⬆ Настройки</button>
+                    <input type="file" id="adminBackupFile" accept="application/json,.json" hidden />
                     <button type="button" class="btn btn-ghost" id="btnAdminLock" title="Закрыть админку">🔒 Закрыть</button>
                   </div>
+                  <div class="pol-grid">
+                    <label class="sel">владелец
+                      <input type="text" id="updOwner" class="input" placeholder="владелец репозитория" autocomplete="off" />
+                    </label>
+                    <label class="sel">репозиторий
+                      <input type="text" id="updRepo" class="input" placeholder="имя репозитория" autocomplete="off" />
+                    </label>
+                    <label class="sel">сборка
+                      <input type="text" id="updWorkflow" class="input" placeholder="pages.yml" autocomplete="off" />
+                    </label>
+                  </div>
+                  <div class="auth-row">
+                    <input type="password" id="updToken" class="input" placeholder="токен GitHub (только в памяти вкладки)" autocomplete="off" />
+                  </div>
+                  <ul class="health-log" id="adminUpdateLog"></ul>
+                  <div class="pol-note">Публикация запускает сборку на GitHub Actions — после неё сайт сам подхватывает новую версию. Токен живёт только в памяти вкладки: он не сохраняется на диске и не попадает в репозиторий.</div>
                 </div>
 
                 <div class="admin-block">
@@ -589,6 +611,23 @@
             <div class="panel-body">
               <div class="news-list">
                 <article class="news-item news-new">
+                  <div class="news-ver">v9.0</div>
+                  <div class="news-body">
+                    <h3>Большое обновление v9.0: самостоятельная админка — центр обновлений</h3>
+                    <p>Админка теперь сама управляет обновлениями сайта. В ней
+                       появился «Центр обновлений»: проверка наличия новой
+                       версии, установка обновления в фоне (обзвон не
+                       прерывается) и кнопка «Опубликовать» — она запускает
+                       сборку на GitHub Actions прямо из браузера, после чего
+                       сайт сам подхватывает новую версию. Токен вводится
+                       модератором и живёт только в памяти вкладки: на диск он
+                       не попадает и в репозиторий его нет. Добавлена также
+                       резервная копия настроек админки — файл входит и
+                       обратно, а журнал обновлений виден прямо в панели.</p>
+                    <a class="news-area" data-view="health">автоподдержка</a>
+                  </div>
+                </article>
+                <article class="news-item">
                   <div class="news-ver">v8.1</div>
                   <div class="news-body">
                     <h3>авто-обновление: проверки пройдены</h3>
@@ -1262,19 +1301,20 @@
   <!-- ФАЙЛ С КОДАМИ ДОСТУПА. В РЕПОЗИТОРИИ ЕГО НЕТ (.gitignore):
        он собирается на сервере или в CI из секретов. Если файла нет —
        вход в пульт и в админку невозможен (это так и задумано). -->
-  <script src="js/auth.local.js?v=8.1"></script>
-  <script src="js/fx.js?v=8.1"></script>
-  <script src="js/monitor.js?v=8.1"></script>
-  <script src="js/nav.js?v=8.1"></script>
-  <script src="js/live.js?v=8.1"></script>
-  <script src="js/archive.js?v=8.1"></script>
-  <script src="js/audit.js?v=8.1"></script>
-  <script src="js/stats.js?v=8.1"></script>
-  <script src="js/profiles.js?v=8.1"></script>
-  <script src="js/health.js?v=8.1"></script>
-  <script src="js/excel.js?v=8.1"></script>
-  <script src="js/moder.js?v=8.1"></script>
-  <script src="js/app.js?v=8.1"></script>
+  <script src="js/auth.local.js?v=9.0"></script>
+  <script src="js/fx.js?v=9.0"></script>
+  <script src="js/monitor.js?v=9.0"></script>
+  <script src="js/nav.js?v=9.0"></script>
+  <script src="js/live.js?v=9.0"></script>
+  <script src="js/archive.js?v=9.0"></script>
+  <script src="js/audit.js?v=9.0"></script>
+  <script src="js/stats.js?v=9.0"></script>
+  <script src="js/profiles.js?v=9.0"></script>
+  <script src="js/health.js?v=9.0"></script>
+  <script src="js/excel.js?v=9.0"></script>
+  <script src="js/moder.js?v=9.0"></script>
+  <script src="js/updater.js?v=9.0"></script>
+  <script src="js/app.js?v=9.0"></script>
   <div class="err-banner" id="errBanner" hidden></div>
 </body>
 </html>

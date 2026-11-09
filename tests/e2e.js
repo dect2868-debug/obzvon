@@ -344,7 +344,7 @@ s.test('кнопка «Обновить сейчас» применяет обн
 
   /* цепочка загрузки продолжается: имитируем успешную загрузку очередного модуля */
   let guard = 0;
-  while (guard++ < 10) {
+  while (guard++ < 40) {
     const pend = t.$$('script[src]').filter((s) => {
       const src = s.getAttribute('src');
       return /[?&]v=9\.9/.test(src) && !s.__loaded;
