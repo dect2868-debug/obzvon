@@ -51,8 +51,8 @@ s.test('шапка сайта показывает актуальную верс
   assert(/id="verBadge"/.test(html), 'нет метки версии verBadge');
 });
 
-s.test('новые файлы подключены (live.js, archive.js, health.js)', () => {
-  ['js/live.js', 'js/archive.js', 'js/health.js'].forEach((f) => {
+s.test('новые файлы подключены (live.js, archive.js, health.js, moder.js)', () => {
+  ['js/live.js', 'js/archive.js', 'js/health.js', 'js/moder.js'].forEach((f) => {
     assert(html.includes(f + '?v=' + V), f + ' не подключён');
     assert(fs.existsSync(path.join(ROOT, f)), 'нет файла ' + f);
   });

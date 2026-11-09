@@ -193,9 +193,10 @@ s.test('сессия: ID, водяной знак, метрики и живой 
   eq(t.el('playfield').hidden, false, 'арена не показана');
 
   /* живой график набирает точки: первый замер пишется сразу при старте (v7.13) */
-  const n0 = t.win.Live.stats().n;
+  const samples0 = t.win.Live.data().samples;
+  const n0 = samples0.length;
   assert(n0 >= 1, 'первый замер не сделан сразу при старте (n=' + n0 + ')');
-  const sum0 = t.win.Live.stats().avg * n0;
+  const sum0 = samples0.reduce((a, s) => a + s.c, 0);
   t.win.Live.sample(92, 4);
   t.win.Live.sample(88, 9);
   await sleep(30);

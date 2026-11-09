@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.14 · LIVE — живая динамика сессии
+   ОБЗВОН v8.0 · LIVE — живая динамика сессии
    График концентрации и «читомеряка» в реальном времени,
    отметки испытаний и нарушений, живая лента событий.
    v4.1: самопочинка (repair), адаптация к размеру окна,
@@ -22,7 +22,7 @@
   var t0 = 0;
   var timer = null;
   var running = false;
-  var last = { c: 0, x: 0 };
+  var last = { c: 0, x: 0, r: 0 };
   var lastEvent = '';
   var stats = { max: 0, min: 100, sum: 0, n: 0, peakCheat: 0 };
   var ro = null;
@@ -140,7 +140,7 @@
     samples = [];
     marks = [];
     t0 = Date.now();
-    last = { c: 0, x: 0 };
+    last = { c: 0, x: 0, r: 0 };
     lastEvent = '';
     stats = { max: 0, min: 100, sum: 0, n: 0, peakCheat: 0 };
     updateSummary();
@@ -149,7 +149,7 @@
     draw();
   }
 
-  function sample(conc, cheat) {
+  function sample(conc, cheat, react) {
     /* защита от NaN/undefined: одна нечисловая точка «убивает» линию —
        canvas молча перестаёт рисовать путь (v7.13) */
     var c = Math.round(Number(conc));
@@ -158,10 +158,13 @@
     if (!isFinite(x)) x = last.x || 0;
     c = Math.max(0, Math.min(100, c));
     x = Math.max(0, Math.min(100, x));
-    last.c = c; last.x = x;
+    var r = Math.round(Number(react));
+    if (!isFinite(r) || r < 0) r = 0;
+    r = Math.min(2000, r);
+    last.c = c; last.x = x; last.r = r;
     if (!t0) t0 = Date.now();          /* первый замер задаёт начало отсчёта */
     var t = Date.now() - t0;
-    samples.push({ t: t, c: c, x: x });
+    samples.push({ t: t, c: c, x: x, r: r });
     if (samples.length > MAX_SAMPLES) samples.shift();
     stats.max = Math.max(stats.max, c);
     stats.min = Math.min(stats.min, c);
@@ -233,7 +236,8 @@
   function updateNow() {
     var box = el('liveNow');
     if (!box) return;
-    box.innerHTML = 'КОНЦ <b>' + last.c + '%</b> · ЧИТ <b>' + last.x + '%</b>';
+    box.innerHTML = 'КОНЦ <b>' + last.c + '%</b> · ЧИТ <b>' + last.x + '%</b>' +
+      (last.r ? ' · РЕАК <b>' + last.r + 'мс</b>' : '');
   }
 
   function updateSummary() {
@@ -357,6 +361,27 @@
     ctx.shadowBlur = 3;
     ctx.stroke();
     ctx.shadowBlur = 0;
+
+    /* линия реакции (v8.0): 0–2000 мс по шкале 0–100 */
+    if (samples.length && samples[samples.length - 1].r > 0) {
+      ctx.beginPath();
+      if (samples.length === 1) {
+        ctx.moveTo(padL, py(samples[0].r / 20));
+        ctx.lineTo(px(samples[0].t), py(samples[0].r / 20));
+        ctx.lineTo(px(samples[0].t), py(samples[0].r / 20) - 0.01);
+      } else {
+        samples.forEach(function (s, i) {
+          var x = px(s.t), y = py(s.r / 20);
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        });
+      }
+      ctx.strokeStyle = '#e8b45a';
+      ctx.lineWidth = 1.2;
+      ctx.shadowColor = 'rgba(232,180,90,.25)';
+      ctx.shadowBlur = 2;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
 
     /* отметки: испытания (ok/fail) и нарушения (viol) */
     marks.forEach(function (m) {

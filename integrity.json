@@ -1,20 +1,20 @@
 {
   "app": "obzvon-integrity",
-  "v": "7.13",
-  "at": "2026-11-08T11:01:22.168Z",
-  "fingerprint": "c50156d3d13de809c2a0c62620a50096d0c7b4cbc9a26265f2847a87fcce47b0",
+  "v": "8.0",
+  "at": "2026-11-09T10:22:39.946Z",
+  "fingerprint": "7c423d232dc0864ab51144eb59853be76454790216354bf048a19dd8eb75b74f",
   "files": {
-    "js/fx.js": "9613a994da1cc179",
-    "js/monitor.js": "d275f881d3964181",
-    "js/nav.js": "633fcbfc7bcf5f58",
-    "js/live.js": "f32de99f899a9efe",
-    "js/archive.js": "fbc2f722ee9024fa",
-    "js/audit.js": "185b6dcc004479b0",
+    "js/fx.js": "b279edb7908ce5e4",
+    "js/monitor.js": "f8091e9dd5b76c72",
+    "js/nav.js": "eb5924ba9cb8cc97",
+    "js/live.js": "32f1734447c0ab3f",
+    "js/archive.js": "deab3053c99f60b2",
+    "js/audit.js": "b3ecc2a55a2a71ff",
     "js/stats.js": "a349d190ed58f91f",
     "js/profiles.js": "e469773a7322892e",
-    "js/health.js": "9a9f6bfc2844de98",
+    "js/health.js": "be5fb904dccc38e6",
     "js/excel.js": "3dc88fc0b2aa7cac",
-    "js/app.js": "e7294977e44ae9e6",
-    "css/styles.css": "cfb08c8e7085e2da"
+    "js/app.js": "4f3a8ab24761298a",
+    "css/styles.css": "72187e6d3c502867"
   }
 }

@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v7.14 :: APP  (логика сессии и испытаний)
+   ОБЗВОН v8.0 :: APP  (логика сессии и испытаний)
    ============================================================ */
 
 /* ---------- защита от встраивания ----------
@@ -32,7 +32,7 @@
 
   /* ---------- настройки ---------- */
   var CONFIG = {
-    appVersion: '7.14',        // версия (должна совпадать с version.json и ?v= в index.html)
+    appVersion: '8.0',        // версия (должна совпадать с version.json и ?v= в index.html)
 
         /* ---------- КОДЫ ДОСТУПА (v6.0) ----------
        Кодов в репозитории НЕТ — иначе их можно перебрать по хешу.
@@ -327,7 +327,9 @@
     'adminOffline','btnAdminOffline','btnAdminActPause','btnAdminActResume','btnAdminActEnd',
     'btnAdminActUnlock','feedFilter',
     'btnAdminProfiles','btnAdminHtml','btnAdminExportAll','btnAdminExcel','selMode','selDensity',
-    'chkBigButtons','selVolume','btnAdminApplyUi']
+    'chkBigButtons','selVolume','btnAdminApplyUi',
+    'liveNext','sumKinds','sumModer','adminModer','btnModerRefresh','btnModerClear',
+    'btnBreak','btnLink','moderRisk']
    .forEach(function (id) { els[id] = $(id); });
 
   /* ---------- реестр слушателей и таймеров (v4.2) ----------
@@ -574,6 +576,14 @@
   };
   var CH_LOG = [];   /* журнал испытаний: {n,kind,calib,ok,ms,note,time} */
 
+  /* ---------- v8.0: модерация, обратный отсчёт, перерыв ---------- */
+  var MOD = {
+    last: null,        /* последний разбор сессии модератором */
+    nextAt: 0,         /* когда появится следующее испытание (мс) */
+    lastReaction: 0,   /* последняя реакция (мс) — для графика */
+    breakTimer: null   /* таймер перерыва участника */
+  };
+
   /* ---------- сортировка таблиц (v3.8) ---------- */
   var statSort = { key: null, dir: 1 };   /* 'label' | 'value' */
   var chSort = { key: 'n', dir: 1 };      /* 'n' | 'kind' | 'ok' | 'ms' */
@@ -761,6 +771,7 @@
     /* v7.13: первое испытание сеанса — ровно через 4 секунды,
        дальше — обычный темп режима (4–8 с) */
     var d = (CH_SEANCE <= 1) ? 4000 : nextDelay();
+    MOD.nextAt = Date.now() + d;   /* обратный отсчёт в живой динамике (v8.0) */
     CH.timers.push(setTimeout(function () { runChallenge(kindRoll(false), false); }, d));
   }
 
@@ -774,6 +785,7 @@
     if (ST.state !== 'running' && ST.state !== 'calib') return;
     CH.active = true; CH.kind = kind; CH.calib = !!calib;
     CH.seqReady = false; CH.seqPos = 0; CH.typed = ''; CH._holding = false;
+    MOD.nextAt = 0;   /* испытание пошло — обратный отсчёт не нужен (v8.0) */
     if (CH._holdT) { clearTimeout(CH._holdT); CH._holdT = null; }
     Monitor.setChallengeActive(true);
     sndTick();
@@ -1023,6 +1035,11 @@
     if (window.Live && !CH.calib) {
       Live.mark(ok ? 'ok' : 'fail', ok ? ('Верно · ' + reaction + ' мс') : 'Испытание провалено');
     }
+    /* модерация: каждое сеансовое испытание уходит на проверку (v8.0) */
+    if (window.Moder && !CH.calib) {
+      Moder.push(ok, reaction, CH.kind);
+      MOD.lastReaction = reaction;
+    }
     if (CH.calib) {
       if (ST.calibDone >= CONFIG.calibCount) {
         feedAdd({ time: ts(), label: 'Калибровка пройдена · база реакции ' + (ST.baseReaction || Monitor.avgReaction() || '—') + ' мс', sev: 0 });
@@ -1182,6 +1199,8 @@
     CH_LOG = CH_LOG.filter(function (r) { return r.calib; });
     Monitor.reset();
     Monitor.setRunning(true);
+    if (window.Moder) Moder.reset();   /* новая сессия — чистая картина модерации (v8.0) */
+    MOD.lastReaction = 0; MOD.nextAt = 0;
     ST.relockBase = 0;
     els.gate.hidden = true;
     els.playfield.hidden = false;
@@ -1318,6 +1337,47 @@
       return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(String(r[1])) + '</td></tr>';
     }).join('');
 
+    /* ---------- v8.0: статистика по видам испытаний + модерация ---------- */
+    var sessionLog = CH_LOG.filter(function (r) { return !r.calib; });
+    if (els.sumKinds) {
+      var byKind = {};
+      sessionLog.forEach(function (r) {
+        var k = r.kind || '—';
+        if (!byKind[k]) byKind[k] = { ok: 0, n: 0, sum: 0, ms: 0 };
+        byKind[k].n++;
+        if (r.ok) { byKind[k].ok++; if (r.ms) { byKind[k].sum += r.ms; byKind[k].ms++; } }
+      });
+      var kindRows = Object.keys(byKind).map(function (k) {
+        var d = byKind[k];
+        var av = d.ms ? Math.round(d.sum / d.ms) + ' мс' : '—';
+        return '<tr><td>' + esc(KIND_NAMES[k] || k) + '</td><td>' + d.ok + ' / ' + d.n +
+          '</td><td>' + av + '</td></tr>';
+      });
+      els.sumKinds.innerHTML = '<thead><tr><th>ИСПЫТАНИЕ</th><th>ВЕРНО / ВСЕГО</th><th>СР. РЕАКЦИЯ</th></tr></thead><tbody>' +
+        (kindRows.join('') || '<tr><td colspan="3">испытаний не было</td></tr>') + '</tbody>';
+    }
+
+    var mod = null;
+    if (window.Moder) {
+      Moder.setConc(Monitor.concentration());
+      mod = Moder.check();
+      MOD.last = mod;
+      var queued = null;
+      if (mod.risk >= 25) {
+        queued = Moder.submit({ sessionId: ST.sessionId || '' });
+        if (window.Audit) Audit.log('moderation.queue',
+          'сессия ' + (ST.sessionId || '') + ' · риск ' + mod.risk + '% (' + mod.level + ')');
+      }
+      if (els.sumModer) {
+        var flagTxt = mod.flags.length
+          ? mod.flags.map(function (f) { return f.name + ' — ' + f.note; }).join('; ')
+          : 'замечаний нет';
+        els.sumModer.innerHTML = '<div class="pol-note">Риск сессии: <b>' + mod.risk + '%</b> (' +
+          mod.level + '). ' + esc(flagTxt) +
+          (queued ? ' · поставлена в очередь модерации (' + esc(queued.id) + ')' : '') + '</div>';
+      }
+    }
+
     /* результаты: таблица метрик и журнал испытаний финализируются */
     updateTables();
     /* фишки */
@@ -1341,6 +1401,7 @@
           ok: seanceLog.filter(function (r) { return r.ok; }).length,
           viol: S.viol.length,
           chips: achList.map(function (c) { return c[1]; }),
+          moder: mod ? mod.risk : 0,
           device: (Monitor.detect() || {}).kind || ''
         });
       } catch (eArch) {
@@ -2009,6 +2070,31 @@
     });
     sheets.push({ name: 'Тревоги', rows: rows5 });
 
+    /* --- лист 6: испытания по видам (v8.0) --- */
+    var rows6 = [['вид испытания', 'верно', 'всего', 'ср. реакция, мс']];
+    var byKind = {};
+    CH_LOG.filter(function (r) { return !r.calib; }).forEach(function (r) {
+      var k = r.kind || '—';
+      if (!byKind[k]) byKind[k] = { ok: 0, n: 0, sum: 0, ms: 0 };
+      byKind[k].n++;
+      if (r.ok) { byKind[k].ok++; if (r.ms) { byKind[k].sum += r.ms; byKind[k].ms++; } }
+    });
+    Object.keys(byKind).forEach(function (k) {
+      var d = byKind[k];
+      rows6.push([String(KIND_NAMES[k] || k), d.ok, d.n, d.ms ? Math.round(d.sum / d.ms) : '']);
+    });
+    sheets.push({ name: 'Испытания', rows: rows6 });
+
+    /* --- лист 7: модерация (v8.0) --- */
+    var rows7 = [['когда', 'сессия', 'риск, %', 'уровень', 'признаки', 'решение']];
+    if (window.Moder) {
+      Moder.queue().slice(0, 50).forEach(function (q) {
+        rows7.push([fmtCellDate(q.at), String(q.sessionId || q.id), q.risk, q.level,
+          (q.flags || []).join('; '), q.decision || 'ожидает решения']);
+      });
+    }
+    sheets.push({ name: 'Модерация', rows: rows7 });
+
     var name = 'obzvon-excel-' + new Date().toISOString().slice(0, 10) + '.xlsx';
     var ok = Excel.download(sheets, name);
     if (ok) {
@@ -2281,6 +2367,38 @@
   on(els.chkFsReq, 'change', function () {
     if (els.chkFsReq.checked && ST.state === 'running') goFullscreen();
   });
+
+  /* ---------- v8.0: перерыв участника и ссылка на сессию ---------- */
+  function startBreak(minutes) {
+    if (ST.state !== 'running') { toast('Перерыв доступен только во время обзвона', 'bad'); return; }
+    var mins = Math.max(1, Math.min(30, minutes || 3));
+    pauseSession();
+    if (MOD.breakTimer) clearTimeout(MOD.breakTimer);
+    MOD.breakTimer = setTimeout(function () {
+      MOD.breakTimer = null;
+      if (ST.state === 'paused') {
+        resumeSession();
+        toast('Перерыв окончен — обзвон продолжается', 'good');
+      }
+    }, mins * 60000);
+    feedAdd({ time: ts(), label: 'Перерыв участника · ' + mins + ' мин (штрафов нет)', sev: 0 });
+    toast('Перерыв ' + mins + ' мин — обзвон продолжится сам', 'good', 4000);
+  }
+  if (els.btnBreak) on(els.btnBreak, 'click', function () { startBreak(3); });
+  if (els.btnLink) on(els.btnLink, 'click', function () {
+    var link = (location.origin || '') + (location.pathname || '') +
+      (ST.sessionId ? ('#' + ST.sessionId) : '');
+    var done = function () { toast('Ссылка на сессию скопирована', 'good'); };
+    var fail = function () {
+      toast('Скопируйте вручную: сессия ' + (ST.sessionId || '—'), '', 5000);
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(done, fail);
+      } else fail();
+    } catch (e) { fail(); }
+    if (window.Audit) Audit.log('session.link', 'ссылка на сессию ' + (ST.sessionId || ''));
+  });
   on(els.btnSound, 'click', function () {
     ST.muted = !ST.muted;
     els.btnSound.textContent = ST.muted ? '🔇' : '🔊';
@@ -2347,6 +2465,7 @@
       /* живой график: отметка нарушения + волна на фоне (v4.0),
          подпись события уходит в живую ленту (v7.13) */
       if (window.Live) Live.mark('viol', item.label);
+      if (window.Moder) Moder.noteViolation();   /* модерация считает нарушения (v8.0) */
       if (window.FX) {
         var r = els.metrics ? els.metrics.getBoundingClientRect() : null;
         FX.pulse(r ? r.left + r.width / 2 : (window.innerWidth / 2),
@@ -2373,7 +2492,19 @@
         if (window.Live) {
           /* самопочинка: если график не запущен — стартуем с первого тика (v7.13) */
           if (!Live.running()) Live.start(liveSource);
-          Live.sample(Monitor.concentration(), Monitor.cheatPercent());
+          Live.sample(Monitor.concentration(), Monitor.cheatPercent(), MOD.lastReaction);
+        }
+        /* обратный отсчёт до следующего испытания + риск модерации (v8.0) */
+        if (els.liveNext) {
+          var left = MOD.nextAt ? Math.max(0, Math.ceil((MOD.nextAt - Date.now()) / 1000)) : 0;
+          els.liveNext.textContent = MOD.nextAt
+            ? (left > 0 ? ('следующее через ' + left + ' с') : 'следующее сейчас')
+            : (CH.active ? 'испытание идёт' : 'следующее —');
+        }
+        if (window.Moder && els.moderRisk) {
+          var chk = Moder.check();
+          els.moderRisk.textContent = 'риск сессии: ' + chk.risk + '% (' + chk.level + ')' +
+            (chk.flags.length ? ' · ' + chk.flags.map(function (f) { return f.name; }).join(', ') : '');
         }
       }
     }
@@ -3309,6 +3440,36 @@
     els.adminProfiles.innerHTML = rows.join('');
   }
 
+  /* ---------- очередь модерации (v8.0) ---------- */
+  function adminModerRender() {
+    if (!els.adminModer) return;
+    if (!window.Moder) {
+      els.adminModer.innerHTML = '<div class="pol-note">модуль модерации не загружен</div>';
+      return;
+    }
+    var list = Moder.queue();
+    if (!list.length) {
+      els.adminModer.innerHTML = '<div class="pol-note">очередь пуста — подозрительных сессий не было</div>';
+      return;
+    }
+    els.adminModer.innerHTML = list.slice(0, 20).map(function (q) {
+      var cls = q.risk >= 60 ? 'bad' : (q.risk >= 25 ? 'warn' : 'ok');
+      var d = new Date(q.at);
+      function p(n) { return ('0' + n).slice(-2); }
+      var head = '<div class="watch-row"><span>' + p(d.getHours()) + ':' + p(d.getMinutes()) + ' · ' +
+        esc(q.sessionId || q.id) + ' · испытаний ' + q.total + '</span>' +
+        '<b class="' + cls + '">риск ' + q.risk + '% (' + q.level + ')</b></div>';
+      var flags = '<div class="pol-note">' + esc(q.flags.join('; ') || 'без признаков') + '</div>';
+      if (q.decision) return head + flags + '<div class="pol-note">решение: ' + esc(q.decision) + '</div>';
+      return head + flags +
+        '<div class="health-tools">' +
+        '<button type="button" class="btn btn-ghost btn-moder" data-id="' + esc(q.id) + '" data-dec="зачёт">✓ Зачёт</button>' +
+        '<button type="button" class="btn btn-ghost btn-moder" data-id="' + esc(q.id) + '" data-dec="повтор">↻ Повтор</button>' +
+        '<button type="button" class="btn btn-danger btn-moder" data-id="' + esc(q.id) + '" data-dec="запрет">✕ Запрет</button>' +
+        '</div>';
+    }).join('');
+  }
+
   /* ---------- статистика в цифрах (v6.1) ---------- */
   function adminStatsRender() {
     if (!els.adminStats) return;
@@ -3592,6 +3753,37 @@
   if (els.btnAdminHtml) on(els.btnAdminHtml, 'click', downloadHtmlReport);
   if (els.btnAdminExportAll) on(els.btnAdminExportAll, 'click', exportEverything);
   if (els.btnAdminExcel) on(els.btnAdminExcel, 'click', exportExcel);
+  /* ---------- модерация (v8.0) ---------- */
+  if (els.btnModerRefresh) on(els.btnModerRefresh, 'click', function () {
+    adminModerRender();
+    adminToast('Очередь модерации обновлена', 'good');
+  });
+  if (els.btnModerClear) on(els.btnModerClear, 'click', function () {
+    if (!window.Moder) return;
+    var list = Moder.queue();
+    var n = 0;
+    list.forEach(function (q) { if (q.decision && Moder.remove(q.id)) n++; });
+    if (window.Audit) Audit.log('moderation.clear', 'снято решённых записей: ' + n);
+    adminModerRender();
+    adminToast('Решённые записи сняты: ' + n, 'good');
+  });
+  if (els.adminModer) on(els.adminModer, 'click', function (ev) {
+    var node = ev.target;
+    while (node && node !== els.adminModer &&
+           !(node.getAttribute && node.getAttribute('data-dec'))) {
+      node = node.parentNode;
+    }
+    if (!node || !node.getAttribute) return;
+    var dec = node.getAttribute('data-dec');
+    var id = node.getAttribute('data-id');
+    if (!dec || !id || !window.Moder) return;
+    var item = Moder.decide(id, dec);
+    if (!item) return;
+    if (window.Audit) Audit.log('moderation.decide',
+      (item.sessionId || item.id) + ' → ' + dec + ' (риск ' + item.risk + '%)');
+    adminToast('Решение по сессии ' + (item.sessionId || item.id) + ': ' + dec, 'good');
+    adminModerRender();
+  });
   if (els.btnAdminApplyUi) on(els.btnAdminApplyUi, 'click', function () {
     if (els.selDensity) CONFIG.ui.density = els.selDensity.value;
     if (els.chkBigButtons) CONFIG.ui.bigButtons = !!els.chkBigButtons.checked;
@@ -3612,6 +3804,7 @@
   every(5000, function () { if (admin.authed) adminAuditRender(); });
   every(10000, function () { if (admin.authed) adminStatsRender(); });
   every(15000, function () { if (admin.authed) adminProfilesRender(); });
+  every(12000, function () { if (admin.authed) adminModerRender(); });
   if (els.btnAdminPurge) on(els.btnAdminPurge, 'click', function () {
     if (typeof window.confirm === 'function' && !/jsdom/i.test(navigator.userAgent || '')) {
       try { if (window.confirm('Удалить статистику, историю и состояние сессии? Действие необратимо.') === false) return; } catch (e) {}
@@ -3676,6 +3869,27 @@
     audit: function () { return window.Audit ? Audit.list() : []; },
     /* отчёт о сессии (без выгрузки файла) */
     report: function () { return buildReport(); },
+    /* модерация (v8.0) — очередь видна только тех. администратору */
+    moderation: function () {
+      if (!admin.authed) return { authed: false, queue: [], stats: null, last: null };
+      return {
+        authed: true,
+        queue: window.Moder ? Moder.queue() : [],
+        stats: window.Moder ? Moder.stats() : null,
+        last: MOD.last
+      };
+    },
+    /* решение модератора по сессии (только тех. администратору) */
+    moderate: function (id, decision) {
+      if (!admin.authed) { toast('Нужен код тех. администратора', 'bad'); return false; }
+      if (!window.Moder || !id || !decision) return false;
+      var item = Moder.decide(id, decision);
+      if (!item) return false;
+      if (window.Audit) Audit.log('moderation.decide',
+        (item.sessionId || item.id) + ' → ' + decision + ' (риск ' + item.risk + '%)');
+      adminModerRender();
+      return true;
+    },
     /* отпечаток загруженного кода — для сверки с опубликованным */
     integrityFile: function () { return publishedIntegrity; },
     /* обновление — только тех. администратору (раньше было доступно всем) */
