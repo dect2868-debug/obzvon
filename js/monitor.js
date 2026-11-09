@@ -1,5 +1,5 @@
 /* ============================================================
-   ОБЗВОН v8.0 :: MONITOR  (детект нарушений + система кандидата)
+   ОБЗВОН v8.1 :: MONITOR  (детект нарушений + система кандидата)
    v4.0: авто-тесты браузера, захват экрана (WebRTC), вторая
    вкладка, подмена часов, пауза-отладчик, расширенный список
    блокируемых сочетаний.
@@ -617,7 +617,7 @@ window.Monitor = (function () {
 
   function report(extra) {
     var r = {
-      version: 'OBZVON-8.0',
+      version: 'OBZVON-8.1',
       generatedAt: new Date().toISOString(),
       session: (extra && extra.session) || null,
       verdict: (extra && extra.verdict) || null,
