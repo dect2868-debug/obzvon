@@ -141,6 +141,17 @@ s.test('новые модули входят в «горячее» обновл�
   assert(html.includes('js/updater.js'), 'updater.js не подключён к странице');
 });
 
+s.test('воркер не отдаёт старую версию сайта (v9.0)', () => {
+  /* навигация — всегда из сети, минуя HTTP-кэш браузера */
+  assert(/req\.mode === 'navigate'[\s\S]{0,400}fetch\(req, \{ cache: 'reload' \}\)/.test(sw),
+    'навигация идёт без сброса HTTP-кэша — пользователь увидит старую страницу');
+  /* файл с меткой версии при отсутствии точной копии берётся из сети */
+  assert(/var versioned = \/\[\?&\]v=\/\.test\(req\.url\)/.test(sw) && /if \(versioned\) \{/.test(sw),
+    'версионные файлы не обновляются из сети');
+  assert(/caches\.match\(req, \{ ignoreSearch: true \}\)/.test(sw),
+    'нет офлайн-запасного варианта для файлов без метки версии');
+});
+
 module.exports = s;
 
 if (require.main === module) {

@@ -15,7 +15,7 @@
    изменился.
    ============================================================ */
 
-var CACHE_NAME = 'obzvon-shell-v9.0';
+var CACHE_NAME = 'obzvon-shell-v9.2';
 var CACHE_PREFIX = 'obzvon-shell-';
 
 /* файлы, которые нужны для работы без сети */
@@ -123,10 +123,12 @@ self.addEventListener('fetch', function (e) {
   /* только свой домен — наружу не ходим и чужое не отдаём */
   if (url.origin !== self.location.origin) return;
 
-  /* навигация: сеть, а при отсутствии или ошибке сети — кэш */
+  /* навигация: сеть (без HTTP-кэша!), а при отсутствии или ошибке сети — кэш.
+     cache:'reload' обязателен: иначе браузер отдаёт из своего кэша
+     старую страницу, и пользователь видит прошлую версию сайта. */
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).then(function (r) {
+      fetch(req, { cache: 'reload' }).then(function (r) {
         if (r && r.ok) return putInCache('./index.html', r);
         /* сервер ответил ошибкой (502 и т.п.) — отдаём сохранённую страницу */
         return caches.match('./index.html').then(function (cached) {
@@ -169,11 +171,13 @@ self.addEventListener('fetch', function (e) {
   /* остальное: сразу из кэша, обновление — фоном (только если файла
      в кэше нет — иначе офлайн ловит лишние сетевые ошибки).
      ignoreSearch: страница запрашивает файлы с ?v=7.0 (антикэш-метка),
-     а в кэше они лежат без запроса. */
+     а в кэше они лежат без запроса.
+     ВАЖНО (v9.0): если точной копии (?v=версия) нет, а в кэше лежит
+     старая — файл с меткой версии берём из сети, и только офлайн
+     отдаём старый. Иначе после релиза первая загрузка отдавала бы
+     прошлую версию кода. */
   e.respondWith(
     caches.match(req).then(function (cached) {
-      return cached || caches.match(req, { ignoreSearch: true });
-    }).then(function (cached) {
       if (cached) {
         /* есть копия — отдаём её сразу, а фоном (только при сети)
            перепроверяем файл: свежесть важна, ожидание — нет */
@@ -184,12 +188,31 @@ self.addEventListener('fetch', function (e) {
         }
         return cached;
       }
-      return fetch(req).then(function (r) {
-        if (r && r.ok) return putInCache(req, r);
-        return r;
-      }).catch(function () {
-        return new Response('Файл недоступен офлайн.', {
-          status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      /* точной копии нет: версионный файл — сначала из сети */
+      var versioned = /[?&]v=/.test(req.url);
+      if (versioned) {
+        return fetch(req).then(function (r) {
+          if (r && r.ok) return putInCache(req, r);
+          return caches.match(req, { ignoreSearch: true }).then(function (old) {
+            return old || r;
+          });
+        }).catch(function () {
+          return caches.match(req, { ignoreSearch: true }).then(function (old) {
+            return old || new Response('Файл недоступен офлайн.', {
+              status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            });
+          });
+        });
+      }
+      return caches.match(req, { ignoreSearch: true }).then(function (old) {
+        if (old) return old;
+        return fetch(req).then(function (r) {
+          if (r && r.ok) return putInCache(req, r);
+          return r;
+        }).catch(function () {
+          return new Response('Файл недоступен офлайн.', {
+            status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+          });
         });
       });
     })
